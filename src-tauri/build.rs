@@ -1,3 +1,5 @@
+mod build_support;
+
 use std::{fs, path::Path};
 
 const DEVELOPMENT_ICON: &[u8] = &[
@@ -10,11 +12,15 @@ const DEVELOPMENT_ICON: &[u8] = &[
 
 fn main() {
     let icon_path = Path::new("icons/icon.png");
+    let ico_path = Path::new("icons/icon.ico");
     if !icon_path.exists() {
         fs::create_dir_all("icons").expect("failed to create the generated icon directory");
         fs::write(icon_path, DEVELOPMENT_ICON)
             .expect("failed to write the generated development icon");
     }
+    let png = fs::read(icon_path).expect("failed to read the generated development icon");
+    fs::write(ico_path, build_support::ico_from_png(&png))
+        .expect("failed to write the Windows development icon");
 
     tauri_build::build()
 }
