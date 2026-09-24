@@ -13,6 +13,7 @@ backups/
 *.bak
 
 # Private legacy sources, extracted assets, and migration working files.
+project_sources/
 private-migration/
 migration-private/
 legacy-inputs/
@@ -28,6 +29,8 @@ node_modules/
 dist/
 target/
 src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/icon.png
 coverage/
 playwright-report/
 test-results/
