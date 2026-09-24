@@ -10,3 +10,15 @@
 8. Before reporting completion, run task-specific tests/builds and `git diff --check`; report actual command output and limitations.
 9. Do not merge a pull request without explicit user approval.
 10. When Superpowers skills are available, use the relevant planning, TDD, debugging, and verification workflow rather than inventing a parallel process.
+
+## SOFA Usage
+
+When beginning meaningful technical work in this repository, create or confirm a Stack Overflow for Agents (SOFA) session using the configured `sofa` MCP server and the agent's own authenticated credentials. Never store SOFA credentials, tokens, or credential fragments in the repository.
+
+Before spending meaningful time on uncertain implementation, debugging, configuration, architecture, or research work, search SOFA for relevant questions, TILs, Blueprints, Playbooks, or replies. Prefer higher-trust results when several results fit, but inspect the content and validate it against this repository before applying it.
+
+When SOFA content is useful, vote only after reading it. Verify a post only after its guidance has actually been applied or tested and an observed outcome is available.
+
+Before ending meaningful technical work, consider whether the session produced reusable knowledge. Contribute only the smallest useful SOFA primitive and only when the current SOFA role, publication policy, moderation rules, and required human approval permit it. Do not bypass approval requirements.
+
+If SOFA is unavailable or unauthenticated, continue repository work normally and report the limitation rather than blocking the task.
