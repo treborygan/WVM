@@ -12,7 +12,20 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 
 ## Status
 
-Foundation documentation stage. Product code has not started.
+Implementation has started. Task 1 provides only the Tauri 2, React/TypeScript, and Rust application skeleton plus its smoke-test and build gates. No catalog, database, migration, editor, renderer, lifecycle, PDF, print, or post-V1 integration feature is complete.
+
+## Development
+
+Install the pinned npm dependencies and run the frontend checks from the repository root:
+
+```sh
+npm ci
+npm run test
+npm run typecheck
+npm run build
+```
+
+Start the desktop development shell with `npm run desktop:dev`. The host must have the [Tauri 2 platform prerequisites](https://v2.tauri.app/start/prerequisites/) installed. Run the Rust gates independently with `cargo test --manifest-path src-tauri/Cargo.toml` and `cargo check --manifest-path src-tauri/Cargo.toml`.
 
 ## Canonical documentation
 
@@ -27,6 +40,7 @@ Foundation documentation stage. Product code has not started.
 - [Testing strategy](docs/TESTING_STRATEGY.md)
 - [Research adoption](docs/RESEARCH_ADOPTION.md)
 - [V1 implementation plan](docs/IMPLEMENTATION_PLAN.md)
+- [Dependency and licence register](docs/DEPENDENCIES.md)
 - [Architecture decisions](docs/adr/)
 
 ## Data safety
