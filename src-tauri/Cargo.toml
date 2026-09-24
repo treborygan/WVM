@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Warehouse Visual Manager desktop shell"
 authors = ["Warehouse Visual Manager contributors"]
 edition = "2021"
-rust-version = "1.98.1"
+rust-version = "1.88.0"
 
 [build-dependencies]
 tauri-build = { version = "=2.6.3", features = [] }
