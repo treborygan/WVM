@@ -1,0 +1,46 @@
+# Local authoritative application data; these files can contain warehouse records.
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db-wal
+*.db-shm
+backups/
+*.backup
+*.bak
+
+# Private legacy sources, extracted assets, and migration working files.
+private-migration/
+migration-private/
+legacy-inputs/
+extracted-assets/
+
+# Local secrets and developer configuration; keep the checked-in example.
+.env
+.env.*
+!.env.example
+
+# Future Tauri, Node, Rust, and test build outputs.
+node_modules/
+dist/
+target/
+src-tauri/target/
+coverage/
+playwright-report/
+test-results/
+
+# Generated output may contain operational text or approved-only artwork.
+exports/
+generated-pdf/
+generated-svg/
+print-output/
+
+# IDE and operating-system files.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
