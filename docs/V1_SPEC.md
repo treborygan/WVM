@@ -56,4 +56,4 @@ These extensions cannot delay correctness of physical dimensions, data safety, p
 
 ## Acceptance gates
 
-V1 acceptance is the checklist in Task 22 of `IMPLEMENTATION_PLAN.md`: full test/build/package gates, private migration reconciliation, five families, six gated exceptions, golden output and exact physical dimensions, backup/restore integrity, and documentation synchronized with the shipped implementation.
+V1 acceptance is the checklist in Task 10 of `IMPLEMENTATION_PLAN.md`: full test/build/package gates, private migration reconciliation, five families, six gated exceptions, golden output and exact physical dimensions, backup/restore integrity, and documentation synchronized with the shipped implementation.

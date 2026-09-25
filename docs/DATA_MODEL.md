@@ -19,11 +19,25 @@
 
 Canonical persisted geometry uses finite millimetres, never browser pixels. Element positions are relative to the page origin. Width/height must be positive. Rotation uses degrees in a documented clockwise screen convention. Z-index defines paint order; hidden and locked are independent. Text style stores font family, size in points, weight/style, horizontal and vertical alignment, line height, wrapping/overflow behavior, fit policy, and color. Binding is a tagged choice between literal content and an allow-listed path such as `visual.location`, `visual.flow`, `visual.description`, `visual.accent_color`, `brand.logo`, or `brand.primary_color`.
 
+The TypeScript contract persists the following version-1 JSON shape (snake_case is intentional for the serialized format):
+
+- `schema_version` is exactly `1`; unsupported versions fail validation until an explicit document migration exists.
+- `page` contains positive `width_mm` and `height_mm`, plus `orientation` (`portrait` or `landscape`).
+- `print_rules` contains `copies_per_page`, four non-negative `margins_mm`, non-negative `gap_mm`, and `slots.rows`/`slots.columns`. Copy count equals rows × columns, and margins plus gaps must leave positive printable width and height for every slot.
+- `repetition` is either `{ "kind": "none" }` or a grid rule with positive rows/columns and non-negative horizontal/vertical gaps. `defaults` carries optional font and color defaults.
+- Every element has an ID, `type`, `x_mm`, `y_mm`, positive `width_mm`/`height_mm`, finite `rotation_degrees`, integer `z_index`, and boolean `visible`/`locked` flags. Negative positions are allowed for editing and are handled by publication/print rules.
+- V1 element types are `text`, `rectangle`, `band`, `background`, `line`, `border`, and `image`. Text includes typed text/color bindings and text layout style, including `fit_policy` (`none` or `shrink_to_fit`); shapes and lines carry typed fills/strokes; images carry an asset ID or the `brand.logo` binding and an explicit fit rule.
+- Text bindings accept only literal text or allow-listed `visual.name`, `visual.location`, `visual.flow`, `visual.description`, and `visual.stock_class` paths. Literal colors use `#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA` hexadecimal syntax; bound colors accept `visual.accent_color`/`brand.primary_color`. Image bindings accept an asset ID or `brand.logo`.
+
+Template defaults `text_color` and `fill_color` use the same literal color syntax. Optional `BrandProfile.primary_color`, `BrandProfile.accent_color`, and `Visual.accent_color` tokens must pass `validateOptionalColorTokens` before persistence or render-time binding resolution.
+
+`validateTemplateDocument(input)` accepts untrusted JSON and returns either a typed document or structured diagnostics (`code`, JSON-style `path`, `message`, and severity). It rejects unknown schema versions, duplicate element IDs, missing/unsupported bindings, invalid page/print data, non-finite geometry, non-positive element dimensions, and values outside JavaScript's safe integer range. It does not reject off-page positions; publication and print policy decide how those are handled.
+
 ### Identity and lifecycle
 
-Existing WVM IDs are preserved as imported identities; generated IDs must be globally unique. Duplicate IDs, dangling foreign keys, unknown lifecycle states, or unsupported document schema versions fail validation. Lifecycle is exactly `Draft`, `Review`, `Published`, `Retired`. Legal transitions are Draft→Review, Review→Draft, Review→Published, Published→Retired, and Retired→Draft only by creating a new version/re-activation operation with an audit event. Published versions cannot be overwritten or deleted through application commands.
+Existing WVM IDs are preserved as imported identities; generated IDs must be globally unique. Duplicate IDs, dangling foreign keys, unknown lifecycle states, or unsupported document schema versions fail validation. Lifecycle is exactly `Draft`, `Review`, `Published`, `Retired`. Legal transitions are Draft→Review, Review→Draft, Review→Published, Published→Retired, and Retired→Draft only by creating a new version/re-activation operation with an audit event. Publishing requires template-family context so family-specific rules cannot be skipped. Published versions cannot be overwritten or deleted through application commands.
 
-The six `gang-special-2up` exception visuals carry an explicit validation state and are ineligible for trusted publication while that state is not `validated` with a recorded reviewer/date/evidence reference.
+The six `gang-special-2up` exception visuals carry an explicit validation state and are ineligible for trusted publication while that state is not `validated` with a recorded reviewer, canonical UTC timestamp (`YYYY-MM-DDTHH:mm:ss.sssZ`), and evidence reference.
 
 ## Relational and document storage
 
