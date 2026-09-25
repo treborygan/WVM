@@ -10,10 +10,12 @@ use std::time::Duration;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 pub use asset_repository::{AssetRecord, AssetRepository};
-pub use template_repository::{TemplateRecord, TemplateRepository, TemplateVersionRecord};
-pub use visual_repository::{VisualRecord, VisualRepository, VisualVersionRecord};
-
-use visual_repository::AuditEventRecord;
+pub use template_repository::{
+    TemplateListQuery, TemplateRecord, TemplateRepository, TemplateVersionRecord,
+};
+pub use visual_repository::{
+    AuditEventRecord, VisualListQuery, VisualRecord, VisualRepository, VisualVersionRecord,
+};
 
 pub type StorageResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 

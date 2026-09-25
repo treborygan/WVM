@@ -2,9 +2,17 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::template_repository::TEMPLATE_FAMILIES;
 use super::{
     append_audit_event, invalid_data, validate_id, validate_lifecycle_state, StorageResult,
 };
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VisualListQuery {
+    pub search: Option<String>,
+    pub lifecycle_state: Option<String>,
+    pub template_family: Option<String>,
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct VisualRecord {
@@ -65,7 +73,9 @@ impl VisualRepository {
                 .as_deref()
                 .is_some_and(|color| !valid_color_token(color))
         {
-            return Err(invalid_data("Visual name and type are required."));
+            return Err(invalid_data(
+                "Visual name and type are required, and optional accent colors must be valid hex tokens.",
+            ));
         }
         connection.execute(
             "INSERT INTO visuals(id, name, visual_type, template_id, stock_class, location, flow,
@@ -107,22 +117,41 @@ impl VisualRepository {
     pub fn list(
         &self,
         connection: &Connection,
-        search: Option<&str>,
+        query: &VisualListQuery,
     ) -> StorageResult<Vec<VisualRecord>> {
-        let pattern = search.map(str::to_lowercase);
+        if query
+            .lifecycle_state
+            .as_deref()
+            .is_some_and(|state| validate_lifecycle_state(state).is_err())
+        {
+            return Err(invalid_data("Unknown lifecycle state filter."));
+        }
+        if query
+            .template_family
+            .as_deref()
+            .is_some_and(|family| !TEMPLATE_FAMILIES.contains(&family))
+        {
+            return Err(invalid_data("Unknown template family filter."));
+        }
+        let search = query.search.as_deref().map(str::to_lowercase);
         let mut statement = connection.prepare(
             "SELECT v.id, v.name, v.visual_type, v.template_id, v.stock_class, v.location, v.flow,
              v.description, v.accent_color, v.lifecycle_state, v.current_draft_version_id,
              v.current_published_version_id, v.created_at, v.updated_at
              FROM visuals v JOIN templates t ON t.id = v.template_id
-             WHERE ?1 IS NULL OR instr(lower(v.name), ?1) > 0 OR instr(lower(v.visual_type), ?1) > 0
+             WHERE (?1 IS NULL OR instr(lower(v.name), ?1) > 0 OR instr(lower(v.visual_type), ?1) > 0
                 OR instr(lower(t.family), ?1) > 0 OR instr(lower(coalesce(v.stock_class, '')), ?1) > 0
                 OR instr(lower(coalesce(v.location, '')), ?1) > 0 OR instr(lower(coalesce(v.flow, '')), ?1) > 0
-                OR instr(lower(coalesce(v.description, '')), ?1) > 0
+                OR instr(lower(coalesce(v.description, '')), ?1) > 0)
+               AND (?2 IS NULL OR v.lifecycle_state = ?2)
+               AND (?3 IS NULL OR t.family = ?3)
              ORDER BY v.name COLLATE NOCASE, v.id",
         )?;
         let values = statement
-            .query_map([pattern], visual_from_row)?
+            .query_map(
+                rusqlite::params![search, query.lifecycle_state, query.template_family],
+                visual_from_row,
+            )?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(values)
     }
@@ -163,6 +192,16 @@ impl VisualRepository {
                 "Visual version number and structured values are invalid.",
             ));
         }
+        let next_version: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(version_number), 0) + 1 FROM visual_versions WHERE visual_id = ?1",
+            [&version.visual_id],
+            |row| row.get(0),
+        )?;
+        if version.version_number != next_version {
+            return Err(invalid_data(
+                "Visual version numbers must increase by exactly one.",
+            ));
+        }
         if audit.entity_kind != "visual_version"
             || audit.entity_id != version.id
             || audit.version_id.as_deref() != Some(version.id.as_str())
@@ -171,19 +210,24 @@ impl VisualRepository {
                 "Visual version audit event must identify the version being added.",
             ));
         }
-        let parent_matches: bool = transaction.query_row(
-            "SELECT EXISTS(SELECT 1 FROM visuals v JOIN template_versions tv
-             ON tv.template_id = v.template_id WHERE v.id = ?1 AND tv.id = ?2
-             AND (?3 = 0 OR tv.published_at IS NOT NULL))",
-            params![
-                version.visual_id,
-                version.template_version_id,
-                version.published_at.is_some()
-            ],
-            |row| row.get(0),
-        )?;
-        if !parent_matches {
+        let template_family: Option<String> = transaction
+            .query_row(
+                "SELECT t.family FROM visuals v JOIN templates t ON t.id = v.template_id
+             JOIN template_versions tv ON tv.template_id = t.id
+             WHERE v.id = ?1 AND tv.id = ?2 AND (?3 = 0 OR tv.published_at IS NOT NULL)",
+                params![
+                    version.visual_id,
+                    version.template_version_id,
+                    version.published_at.is_some()
+                ],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(template_family) = template_family else {
             return Err(invalid_data("Visual version must select a version of its visual's template, and publication requires a published template."));
+        };
+        if version.published_at.is_some() && template_family == "gang-special-2up" {
+            validate_special_publication(version.special_validation.as_ref())?;
         }
         transaction.execute(
             "INSERT INTO visual_versions(id, visual_id, version_number, template_version_id, values_json,
@@ -223,8 +267,9 @@ impl VisualRepository {
         transaction: &Transaction<'_>,
         visual_id: &str,
         version_id: &str,
+        audit: &AuditEventRecord,
     ) -> StorageResult<()> {
-        self.set_pointer(transaction, visual_id, version_id, false)
+        self.set_pointer(transaction, visual_id, version_id, false, audit)
     }
 
     pub fn set_current_published_version(
@@ -232,8 +277,9 @@ impl VisualRepository {
         transaction: &Transaction<'_>,
         visual_id: &str,
         version_id: &str,
+        audit: &AuditEventRecord,
     ) -> StorageResult<()> {
-        self.set_pointer(transaction, visual_id, version_id, true)
+        self.set_pointer(transaction, visual_id, version_id, true, audit)
     }
 
     fn set_pointer(
@@ -242,9 +288,18 @@ impl VisualRepository {
         visual_id: &str,
         version_id: &str,
         published: bool,
+        audit: &AuditEventRecord,
     ) -> StorageResult<()> {
         validate_id(visual_id)?;
         validate_id(version_id)?;
+        if audit.entity_kind != "visual"
+            || audit.entity_id != visual_id
+            || audit.version_id.as_deref() != Some(version_id)
+        {
+            return Err(invalid_data(
+                "Visual pointer audit event must identify the visual and selected version.",
+            ));
+        }
         let (column, eligibility) = if published {
             ("current_published_version_id", "published_at IS NOT NULL")
         } else {
@@ -264,6 +319,7 @@ impl VisualRepository {
                 "Version was not found for this visual or has the wrong publication state.",
             ));
         }
+        append_audit_event(transaction, audit)?;
         Ok(())
     }
 }
@@ -276,6 +332,64 @@ fn valid_color_token(color: &str) -> bool {
         && digits
             .chars()
             .all(|character| character.is_ascii_hexdigit())
+}
+
+fn validate_special_publication(validation: Option<&Value>) -> StorageResult<()> {
+    let validation = validation
+        .and_then(Value::as_object)
+        .ok_or_else(|| invalid_data("Special Gang publication requires validation evidence."))?;
+    let reviewed_at = validation.get("reviewed_at").and_then(Value::as_str);
+    if validation.get("state").and_then(Value::as_str) != Some("validated")
+        || validation
+            .get("reviewer_id")
+            .and_then(Value::as_str)
+            .is_none_or(|value| value.trim().is_empty())
+        || reviewed_at.is_none_or(|value| !is_canonical_utc_timestamp(value))
+        || validation
+            .get("evidence_ref")
+            .and_then(Value::as_str)
+            .is_none_or(|value| value.trim().is_empty())
+    {
+        return Err(invalid_data("Special Gang publication requires validated state, reviewer, canonical UTC review time, and evidence reference."));
+    }
+    Ok(())
+}
+
+fn is_canonical_utc_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 24
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+        || bytes[19] != b'.'
+        || bytes[23] != b'Z'
+        || ![0..4, 5..7, 8..10, 11..13, 14..16, 17..19, 20..23]
+            .iter()
+            .all(|range| bytes[range.clone()].iter().all(u8::is_ascii_digit))
+    {
+        return false;
+    }
+    let parse = |range: std::ops::Range<usize>| value[range].parse::<u32>().ok();
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        parse(0..4),
+        parse(5..7),
+        parse(8..10),
+        parse(11..13),
+        parse(14..16),
+        parse(17..19),
+    ) else {
+        return false;
+    };
+    let max_day = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => return false,
+    };
+    (1..=max_day).contains(&day) && hour <= 23 && minute <= 59 && second <= 59
 }
 
 fn visual_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<VisualRecord> {

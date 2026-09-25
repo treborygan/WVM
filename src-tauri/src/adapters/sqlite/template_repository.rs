@@ -9,13 +9,19 @@ use super::{
     append_audit_event, invalid_data, validate_id, validate_lifecycle_state, StorageResult,
 };
 
-const TEMPLATE_FAMILIES: [&str; 5] = [
+pub(super) const TEMPLATE_FAMILIES: [&str; 5] = [
     "gang-standard-2up",
     "gang-special-2up",
     "flow-sticker-12up",
     "stand-standard-3up",
     "stand-level-instruction-3up",
 ];
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TemplateListQuery {
+    pub search: Option<String>,
+    pub family: Option<String>,
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct TemplateRecord {
@@ -79,17 +85,25 @@ impl TemplateRepository {
     pub fn list(
         &self,
         connection: &Connection,
-        search: Option<&str>,
+        query: &TemplateListQuery,
     ) -> StorageResult<Vec<TemplateRecord>> {
-        let pattern = search.map(contains_pattern);
+        if query
+            .family
+            .as_deref()
+            .is_some_and(|family| !TEMPLATE_FAMILIES.contains(&family))
+        {
+            return Err(invalid_data("Unknown template family filter."));
+        }
+        let search = query.search.as_deref().map(str::to_lowercase);
         let mut statement = connection.prepare(
             "SELECT id, family, name, visual_type, lifecycle_state, active_published_version_id, created_at, updated_at, provenance
              FROM templates
-             WHERE ?1 IS NULL OR name LIKE ?1 ESCAPE '\\' COLLATE NOCASE OR visual_type LIKE ?1 ESCAPE '\\' COLLATE NOCASE
+             WHERE (?1 IS NULL OR instr(lower(name), ?1) > 0 OR instr(lower(visual_type), ?1) > 0 OR instr(lower(family), ?1) > 0)
+               AND (?2 IS NULL OR family = ?2)
              ORDER BY name COLLATE NOCASE, id",
         )?;
         let records = statement
-            .query_map([pattern], template_from_row)?
+            .query_map(rusqlite::params![search, query.family], template_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(records)
     }
@@ -119,6 +133,16 @@ impl TemplateRepository {
         validate_id(&version.template_id)?;
         if version.version_number <= 0 {
             return Err(invalid_data("Template version numbers must be positive."));
+        }
+        let next_version: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(version_number), 0) + 1 FROM template_versions WHERE template_id = ?1",
+            [&version.template_id],
+            |row| row.get(0),
+        )?;
+        if version.version_number != next_version {
+            return Err(invalid_data(
+                "Template version numbers must increase by exactly one.",
+            ));
         }
         if audit.entity_kind != "template_version"
             || audit.entity_id != version.id
@@ -155,9 +179,18 @@ impl TemplateRepository {
         transaction: &Transaction<'_>,
         template_id: &str,
         version_id: &str,
+        audit: &AuditEventRecord,
     ) -> StorageResult<()> {
         validate_id(template_id)?;
         validate_id(version_id)?;
+        if audit.entity_kind != "template"
+            || audit.entity_id != template_id
+            || audit.version_id.as_deref() != Some(version_id)
+        {
+            return Err(invalid_data(
+                "Template pointer audit event must identify the template and selected version.",
+            ));
+        }
         let updated = transaction.execute(
             "UPDATE templates SET active_published_version_id = ?1, lifecycle_state = 'Published',
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?2
@@ -169,6 +202,7 @@ impl TemplateRepository {
                 "Published template version was not found for the requested template.",
             ));
         }
+        append_audit_event(transaction, audit)?;
         Ok(())
     }
 }
@@ -210,16 +244,6 @@ fn template_version_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Templa
 
 fn to_sql_conversion_error(error: serde_json::Error) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(error))
-}
-
-fn contains_pattern(query: &str) -> String {
-    format!(
-        "%{}%",
-        query
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_")
-    )
 }
 
 fn validate_template_document(document: &Value) -> StorageResult<String> {

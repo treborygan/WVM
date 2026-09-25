@@ -6,8 +6,8 @@ use tempfile::TempDir;
 
 use super::{
     apply_migrations, AssetRecord, AssetRepository, AuditEventRecord, Migration, SqliteDatabase,
-    StorageResult, TemplateRecord, TemplateRepository, TemplateVersionRecord, VisualRecord,
-    VisualRepository, VisualVersionRecord,
+    StorageResult, TemplateListQuery, TemplateRecord, TemplateRepository, TemplateVersionRecord,
+    VisualListQuery, VisualRecord, VisualRepository, VisualVersionRecord,
 };
 
 fn open_database() -> (TempDir, SqliteDatabase) {
@@ -113,6 +113,24 @@ fn template_audit(id: &str, entity_id: &str) -> AuditEventRecord {
     }
 }
 
+fn pointer_audit(
+    id: &str,
+    entity_kind: &str,
+    entity_id: &str,
+    version_id: &str,
+) -> AuditEventRecord {
+    AuditEventRecord {
+        id: id.to_owned(),
+        entity_kind: entity_kind.to_owned(),
+        entity_id: entity_id.to_owned(),
+        version_id: Some(version_id.to_owned()),
+        action: "current_version_changed".to_owned(),
+        occurred_at: "2026-09-25T08:00:00.000Z".to_owned(),
+        actor: Some("synthetic-test".to_owned()),
+        details: json!({ "source": "synthetic-test" }),
+    }
+}
+
 fn add_parent_records(database: &SqliteDatabase) {
     let connection = database.connect().expect("connection opens");
     TemplateRepository
@@ -142,6 +160,11 @@ fn repository_contract_preserves_stable_ids_and_searches_catalog_fields() {
     TemplateRepository
         .create(&connection, &template("legacy-template-1"))
         .expect("template inserts");
+    let mut special_template = template("legacy-template-special");
+    special_template.family = "gang-special-2up".to_owned();
+    TemplateRepository
+        .create(&connection, &special_template)
+        .expect("special template inserts");
     VisualRepository
         .create(
             &connection,
@@ -164,21 +187,51 @@ fn repository_contract_preserves_stable_ids_and_searches_catalog_fields() {
             ),
         )
         .expect("second visual inserts");
+    connection
+        .execute(
+            "UPDATE visuals SET lifecycle_state = 'Review' WHERE id = 'POC-GANG-125'",
+            [],
+        )
+        .expect("second visual enters review");
 
     let found = VisualRepository
         .get(&connection, "POC-GANG-124")
         .expect("visual query");
     let filtered = VisualRepository
-        .list(&connection, Some("outbound"))
+        .list(
+            &connection,
+            &VisualListQuery {
+                search: Some("outbound".to_owned()),
+                lifecycle_state: Some("Draft".to_owned()),
+                template_family: Some("gang-standard-2up".to_owned()),
+            },
+        )
         .expect("visual list");
     let by_location = VisualRepository
-        .list(&connection, Some("a-01"))
+        .list(
+            &connection,
+            &VisualListQuery {
+                search: Some("a-01".to_owned()),
+                ..Default::default()
+            },
+        )
         .expect("location search");
+    let special_templates = TemplateRepository
+        .list(
+            &connection,
+            &TemplateListQuery {
+                family: Some("gang-special-2up".to_owned()),
+                ..Default::default()
+            },
+        )
+        .expect("template family filter");
 
     assert_eq!(found.expect("stable ID remains present").id, "POC-GANG-124");
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].id, "POC-GANG-124");
     assert_eq!(by_location.len(), 2);
+    assert_eq!(special_templates.len(), 1);
+    assert_eq!(special_templates[0].id, "legacy-template-special");
 }
 
 #[test]
@@ -226,6 +279,16 @@ fn repository_contract_enforces_version_immutability_and_unique_numbers() {
     );
     assert_eq!(published_template.lifecycle_state, "Published");
 
+    let mut skipped = template_version("template-version-3", "template-1");
+    skipped.version_number = 3;
+    assert!(database
+        .transaction(|transaction| TemplateRepository.add_version(
+            transaction,
+            &skipped,
+            &template_audit("template-audit-3", &skipped.id),
+        ))
+        .is_err());
+
     assert!(connection
         .execute(
             "UPDATE template_versions SET created_by = 'changed' WHERE id = ?1",
@@ -253,9 +316,18 @@ fn repository_contract_writes_version_pointer_and_audit_in_one_transaction() {
     let connection = database.connect().expect("connection opens");
     let version = visual_version("visual-version-1", "visual-1", "template-version-1");
     let event = audit("visual-audit-1", &version.id);
+    let pointer_event = pointer_audit("visual-pointer-audit-1", "visual", "visual-1", &version.id);
 
     database
-        .transaction(|transaction| VisualRepository.add_version(transaction, &version, &event))
+        .transaction(|transaction| {
+            VisualRepository.add_version(transaction, &version, &event)?;
+            VisualRepository.set_current_draft_version(
+                transaction,
+                "visual-1",
+                &version.id,
+                &pointer_event,
+            )
+        })
         .expect("version and audit commit");
 
     let visual = VisualRepository
@@ -264,8 +336,9 @@ fn repository_contract_writes_version_pointer_and_audit_in_one_transaction() {
         .expect("visual exists");
     let (versions, audits): (i64, i64) = connection
         .query_row(
-            "SELECT (SELECT COUNT(*) FROM visual_versions WHERE id = ?1), (SELECT COUNT(*) FROM audit_events WHERE id = ?2)",
-            (&version.id, &event.id),
+            "SELECT (SELECT COUNT(*) FROM visual_versions WHERE id = ?1),
+             (SELECT COUNT(*) FROM audit_events WHERE id IN (?2, ?3))",
+            (&version.id, &event.id, &pointer_event.id),
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .expect("version and audit counts query");
@@ -274,7 +347,7 @@ fn repository_contract_writes_version_pointer_and_audit_in_one_transaction() {
         visual.current_draft_version_id.as_deref(),
         Some(version.id.as_str())
     );
-    assert_eq!((versions, audits), (1, 1));
+    assert_eq!((versions, audits), (1, 2));
     assert_eq!(
         VisualRepository
             .list_versions(&connection, "visual-1")
@@ -290,6 +363,37 @@ fn repository_contract_writes_version_pointer_and_audit_in_one_transaction() {
     assert!(connection
         .execute("DELETE FROM audit_events WHERE id = ?1", [&event.id])
         .is_err());
+}
+
+#[test]
+fn repository_contract_audits_template_pointer_changes() {
+    let (_directory, database) = open_database();
+    add_parent_records(&database);
+    let event = pointer_audit(
+        "template-pointer-audit",
+        "template",
+        "template-1",
+        "template-version-1",
+    );
+    database
+        .transaction(|transaction| {
+            TemplateRepository.set_active_published_version(
+                transaction,
+                "template-1",
+                "template-version-1",
+                &event,
+            )
+        })
+        .expect("template pointer and audit commit");
+    let connection = database.connect().expect("connection opens");
+    let count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM audit_events WHERE id = ?1",
+            [&event.id],
+            |row| row.get(0),
+        )
+        .expect("audit count query");
+    assert_eq!(count, 1);
 }
 
 #[test]
@@ -337,14 +441,127 @@ fn repository_contract_rejects_cross_template_versions_and_misassociated_audits(
 }
 
 #[test]
+fn repository_contract_requires_visual_version_numbers_to_increase_by_one() {
+    let (_directory, database) = open_database();
+    add_parent_records(&database);
+    let version = visual_version("visual-version-3", "visual-1", "template-version-1");
+    let mut version = version;
+    version.version_number = 3;
+    assert!(database
+        .transaction(|transaction| VisualRepository.add_version(
+            transaction,
+            &version,
+            &audit("visual-audit-3", &version.id),
+        ))
+        .is_err());
+}
+
+#[test]
+fn repository_contract_blocks_unvalidated_special_visual_publication() {
+    let (_directory, database) = open_database();
+    let connection = database.connect().expect("connection opens");
+    let mut special_template = template("special-template");
+    special_template.family = "gang-special-2up".to_owned();
+    TemplateRepository
+        .create(&connection, &special_template)
+        .expect("special template inserts");
+    database
+        .transaction(|transaction| {
+            TemplateRepository.add_version(
+                transaction,
+                &template_version("special-template-version", "special-template"),
+                &template_audit("special-template-audit", "special-template-version"),
+            )
+        })
+        .expect("published template version inserts");
+    VisualRepository
+        .create(
+            &connection,
+            &visual(
+                "special-visual",
+                "special-template",
+                "Synthetic special",
+                "special flow",
+            ),
+        )
+        .expect("special visual inserts");
+
+    let mut version = visual_version(
+        "special-visual-version",
+        "special-visual",
+        "special-template-version",
+    );
+    version.published_at = Some("2026-09-25T08:00:00.000Z".to_owned());
+    assert!(database
+        .transaction(|transaction| {
+            VisualRepository.add_version(
+                transaction,
+                &version,
+                &audit("special-visual-audit", &version.id),
+            )
+        })
+        .is_err());
+    assert!(connection.execute(
+        "INSERT INTO visual_versions(id, visual_id, version_number, template_version_id, values_json,
+         created_at, published_at) VALUES ('special-visual-direct', 'special-visual', 1,
+         'special-template-version', '{}', '2026-09-25T08:00:00.000Z', '2026-09-25T08:00:00.000Z')",
+        [],
+    ).is_err());
+
+    version.special_validation = Some(json!({
+        "state": "validated",
+        "reviewer_id": "reviewer-1",
+        "reviewed_at": "2026-02-30T08:00:00.000Z",
+        "evidence_ref": "synthetic-evidence-1"
+    }));
+    assert!(database
+        .transaction(|transaction| {
+            VisualRepository.add_version(
+                transaction,
+                &version,
+                &audit("special-visual-audit-invalid-date", &version.id),
+            )
+        })
+        .is_err());
+
+    version.special_validation = Some(json!({
+        "state": "validated",
+        "reviewer_id": "reviewer-1",
+        "reviewed_at": "2026-09-25T08:00:00.000Z",
+        "evidence_ref": "synthetic-evidence-1"
+    }));
+    assert!(database
+        .transaction(|transaction| {
+            VisualRepository.add_version(
+                transaction,
+                &version,
+                &audit("special-visual-audit-valid", &version.id),
+            )
+        })
+        .is_ok());
+}
+
+#[test]
 fn repository_contract_rolls_back_version_pointer_and_audit_after_injected_failure() {
     let (_directory, database) = open_database();
     add_parent_records(&database);
     let version = visual_version("visual-version-fail", "visual-1", "template-version-1");
     let event = audit("visual-audit-fail", &version.id);
+    let pointer_event = pointer_audit(
+        "visual-pointer-audit-fail",
+        "visual",
+        "visual-1",
+        &version.id,
+    );
 
     let result: StorageResult<()> = database.transaction(|transaction| {
         VisualRepository.add_version(transaction, &version, &event)?;
+        VisualRepository.set_current_draft_version(
+            transaction,
+            "visual-1",
+            &version.id,
+            &pointer_event,
+        )?;
         Err(Box::new(io::Error::other("injected transaction failure")))
     });
     assert!(result.is_err());
@@ -357,16 +574,18 @@ fn repository_contract_rolls_back_version_pointer_and_audit_after_injected_failu
             |row| row.get(0),
         )
         .expect("pointer query");
-    let (versions, audits): (i64, i64) = connection
+    let (versions, version_audits, pointer_audits): (i64, i64, i64) = connection
         .query_row(
-            "SELECT (SELECT COUNT(*) FROM visual_versions WHERE id = ?1), (SELECT COUNT(*) FROM audit_events WHERE id = ?2)",
-            (&version.id, &event.id),
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            "SELECT (SELECT COUNT(*) FROM visual_versions WHERE id = ?1),
+             (SELECT COUNT(*) FROM audit_events WHERE id = ?2),
+             (SELECT COUNT(*) FROM audit_events WHERE id = ?3)",
+            (&version.id, &event.id, &pointer_event.id),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .expect("version and audit counts query");
 
     assert_eq!(pointer, None);
-    assert_eq!((versions, audits), (0, 0));
+    assert_eq!((versions, version_audits, pointer_audits), (0, 0, 0));
 }
 
 #[test]
