@@ -74,4 +74,21 @@ describe("lifecycle transitions", () => {
 
     expect(result).toEqual({ ok: true, state: "Published" });
   });
+
+  it.each(["1", "2026-02-30T08:00:00.000Z", "2026-09-25"])(
+    "rejects an ambiguous or invalid special Gang review timestamp %s",
+    (reviewed_at) => {
+      const result = transitionLifecycle("Review", "publish", {
+        templateFamily: "gang-special-2up",
+        specialValidation: {
+          state: "validated",
+          reviewer_id: "reviewer-1",
+          reviewed_at,
+          evidence_ref: "validation-record-1",
+        },
+      });
+
+      expect(result).toMatchObject({ ok: false, diagnostic: { code: "special_record_not_validated" } });
+    },
+  );
 });

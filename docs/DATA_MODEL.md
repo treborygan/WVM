@@ -37,7 +37,7 @@ Template defaults `text_color` and `fill_color` use the same literal color synta
 
 Existing WVM IDs are preserved as imported identities; generated IDs must be globally unique. Duplicate IDs, dangling foreign keys, unknown lifecycle states, or unsupported document schema versions fail validation. Lifecycle is exactly `Draft`, `Review`, `Published`, `Retired`. Legal transitions are Draft→Review, Review→Draft, Review→Published, Published→Retired, and Retired→Draft only by creating a new version/re-activation operation with an audit event. Publishing requires template-family context so family-specific rules cannot be skipped. Published versions cannot be overwritten or deleted through application commands.
 
-The six `gang-special-2up` exception visuals carry an explicit validation state and are ineligible for trusted publication while that state is not `validated` with a recorded reviewer/date/evidence reference.
+The six `gang-special-2up` exception visuals carry an explicit validation state and are ineligible for trusted publication while that state is not `validated` with a recorded reviewer, canonical UTC timestamp (`YYYY-MM-DDTHH:mm:ss.sssZ`), and evidence reference.
 
 ## Relational and document storage
 

@@ -42,6 +42,14 @@ function reject(code: string, message: string): LifecycleResult {
   };
 }
 
+function isCanonicalUtcTimestamp(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return false;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
 export function transitionLifecycle(
   state: LifecycleState,
   action: LifecycleAction,
@@ -71,8 +79,7 @@ export function transitionLifecycle(
       validation?.state === "validated" &&
       typeof validation.reviewer_id === "string" &&
       validation.reviewer_id.trim().length > 0 &&
-      typeof validation.reviewed_at === "string" &&
-      Number.isFinite(Date.parse(validation.reviewed_at)) &&
+      isCanonicalUtcTimestamp(validation.reviewed_at) &&
       typeof validation.evidence_ref === "string" &&
       validation.evidence_ref.trim().length > 0;
 
