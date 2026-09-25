@@ -24,6 +24,13 @@ describe("canonical domain IDs", () => {
     expect(() => parseId(input, "visual")).toThrow();
   });
 
+  it.each(Array.from({ length: 0x20 }, (_, index) => String.fromCharCode(0x80 + index)))(
+    "rejects C1 control character %j in IDs",
+    (control) => {
+      expect(() => parseId(`id${control}with-control`, "visual")).toThrow();
+    },
+  );
+
   it("generates stable-format globally unique IDs", () => {
     const first = createId("visual");
     const second = createId("visual");

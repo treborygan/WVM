@@ -31,7 +31,7 @@ export function parseId<Kind extends EntityKind>(value: string, kind: Kind): Ent
     value.length === 0 ||
     value.length > 128 ||
     value.trim() !== value ||
-    /[\u0000-\u001f\u007f]/u.test(value)
+    /[\u0000-\u001f\u007f-\u009f]/u.test(value)
   ) {
     throw new InvalidEntityIdError(kind);
   }
