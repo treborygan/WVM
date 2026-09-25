@@ -185,10 +185,7 @@ impl VisualRepository {
             || !version.values.is_object()
             || !version.values.as_object().is_some_and(|values| {
                 values.values().all(|value| {
-                    value.is_null()
-                        || value.is_string()
-                        || value.is_boolean()
-                        || value.is_number()
+                    value.is_null() || value.is_string() || value.is_boolean() || value.is_number()
                 })
             })
             || version
