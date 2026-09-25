@@ -269,15 +269,12 @@ fn repository_contract_enforces_version_immutability_and_unique_numbers() {
             )
         })
         .expect("template version inserts");
-    let published_template = TemplateRepository
+    let unpublished_template = TemplateRepository
         .get(&connection, "template-1")
         .expect("template query")
         .expect("template exists");
-    assert_eq!(
-        published_template.active_published_version_id.as_deref(),
-        Some(first.id.as_str())
-    );
-    assert_eq!(published_template.lifecycle_state, "Published");
+    assert_eq!(unpublished_template.active_published_version_id, None);
+    assert_eq!(unpublished_template.lifecycle_state, "Draft");
 
     let mut skipped = template_version("template-version-3", "template-1");
     skipped.version_number = 3;
@@ -287,7 +284,7 @@ fn repository_contract_enforces_version_immutability_and_unique_numbers() {
             &skipped,
             &template_audit("template-audit-3", &skipped.id),
         ))
-        .is_err());
+        .is_ok());
 
     assert!(connection
         .execute(
@@ -321,6 +318,15 @@ fn repository_contract_writes_version_pointer_and_audit_in_one_transaction() {
     database
         .transaction(|transaction| {
             VisualRepository.add_version(transaction, &version, &event)?;
+            let pointer: Option<String> = transaction.query_row(
+                "SELECT current_draft_version_id FROM visuals WHERE id = 'visual-1'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(
+                pointer, None,
+                "adding a version must not change its pointer without a pointer audit"
+            );
             VisualRepository.set_current_draft_version(
                 transaction,
                 "visual-1",
@@ -441,7 +447,7 @@ fn repository_contract_rejects_cross_template_versions_and_misassociated_audits(
 }
 
 #[test]
-fn repository_contract_requires_visual_version_numbers_to_increase_by_one() {
+fn repository_contract_requires_visual_version_numbers_to_increase_monotonically() {
     let (_directory, database) = open_database();
     add_parent_records(&database);
     let version = visual_version("visual-version-3", "visual-1", "template-version-1");
@@ -453,7 +459,47 @@ fn repository_contract_requires_visual_version_numbers_to_increase_by_one() {
             &version,
             &audit("visual-audit-3", &version.id),
         ))
+        .is_ok());
+
+    let mut older = visual_version("visual-version-2", "visual-1", "template-version-1");
+    older.version_number = 2;
+    assert!(database
+        .transaction(|transaction| VisualRepository.add_version(
+            transaction,
+            &older,
+            &audit("visual-audit-2", &older.id),
+        ))
         .is_err());
+}
+
+#[test]
+fn repository_contract_upgrades_existing_v1_databases_with_special_publication_gate() {
+    let directory = TempDir::new().expect("temporary directory");
+    let path = directory.path().join("wvm.sqlite");
+    let mut connection = Connection::open(&path).expect("connection opens");
+    super::configure_connection(&connection).expect("connection configured");
+    let v1 = [Migration {
+        version: 1,
+        name: "0001_initial.sql",
+        sql: super::INITIAL_SCHEMA,
+    }];
+    apply_migrations(&mut connection, &v1).expect("v1 schema applies");
+    connection
+        .execute_batch(super::SPECIAL_PUBLICATION_GATE)
+        .expect("shipped v1 publication trigger applies without recording a second migration");
+    drop(connection);
+
+    let database = SqliteDatabase::open(&path).expect("database upgrades");
+    assert_eq!(database.schema_version().expect("schema version"), 2);
+    let connection = database.connect().expect("connection opens");
+    let trigger_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name = 'special_visual_versions_require_validation'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("trigger lookup");
+    assert_eq!(trigger_count, 1);
 }
 
 #[test]

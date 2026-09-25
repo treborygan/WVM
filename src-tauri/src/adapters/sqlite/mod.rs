@@ -20,11 +20,19 @@ pub use visual_repository::{
 pub type StorageResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 const INITIAL_SCHEMA: &str = include_str!("migrations/0001_initial.sql");
-const MIGRATIONS: [Migration; 1] = [Migration {
-    version: 1,
-    name: "0001_initial.sql",
-    sql: INITIAL_SCHEMA,
-}];
+const SPECIAL_PUBLICATION_GATE: &str = include_str!("migrations/0002_special_publication_gate.sql");
+const MIGRATIONS: [Migration; 2] = [
+    Migration {
+        version: 1,
+        name: "0001_initial.sql",
+        sql: INITIAL_SCHEMA,
+    },
+    Migration {
+        version: 2,
+        name: "0002_special_publication_gate.sql",
+        sql: SPECIAL_PUBLICATION_GATE,
+    },
+];
 
 struct Migration {
     version: i64,
