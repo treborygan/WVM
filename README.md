@@ -12,7 +12,7 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 
 ## Status
 
-Implementation has started. Task 1 provides only the Tauri 2, React/TypeScript, and Rust application skeleton plus its smoke-test and build gates. No catalog, database, migration, editor, renderer, lifecycle, PDF, print, or post-V1 integration feature is complete.
+The verified Task 1 foundation is in place. Task 2 now defines canonical TypeScript domain entities, schema-versioned millimetre template documents, typed bindings, structured validation, and lifecycle transition rules. Catalog workflows, SQLite persistence, migration/import, editor, renderer, PDF, print, and post-V1 integrations remain unimplemented.
 
 ## Development
 

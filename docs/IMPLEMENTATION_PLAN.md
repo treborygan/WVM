@@ -53,12 +53,12 @@
 - Consumes: architecture boundaries in `docs/ARCHITECTURE.md`.
 - Produces: `npm run test`, `npm run typecheck`, `npm run build`, `cargo test`; a Tauri shell with a rendered `App`; a synthetic-only fixture boundary; a dependency/licence register. No catalog/editor features.
 
-- [ ] **Step 1: Write a failing app smoke test** asserting `App` renders the application name and foundation status.
+- [x] **Step 1: Write a failing app smoke test** asserting `App` renders the application name and foundation status.
 - [ ] **Step 2: Run `npm run test -- tests/smoke/app.test.tsx`;** expect failure because app/test configuration is absent.
-- [ ] **Step 3: Scaffold the Tauri 2 + React/TypeScript + Rust application** with pinned compatible versions, Vitest/React Testing Library, and the four package scripts. Record each direct dependency and licence in `docs/DEPENDENCIES.md`.
-- [ ] **Step 4: Implement the minimal `App` shell** and synthetic fixture policy; add no product operations.
-- [ ] **Step 5: Run `npm run test -- tests/smoke/app.test.tsx`, `npm run typecheck`, `npm run build`, and `cargo test`;** expect the smoke test and all configured checks to pass.
-- [ ] **Step 6: Check `git diff --check` and confirm no workflow automation or real data was added.**
+- [x] **Step 3: Scaffold the Tauri 2 + React/TypeScript + Rust application** with pinned compatible versions, Vitest/React Testing Library, and the four package scripts. Record each direct dependency and licence in `docs/DEPENDENCIES.md`.
+- [x] **Step 4: Implement the minimal `App` shell** and synthetic fixture policy; add no product operations.
+- [x] **Step 5: Run `npm run test -- tests/smoke/app.test.tsx`, `npm run typecheck`, `npm run build`, and `cargo test`;** expect the smoke test and all configured checks to pass.
+- [x] **Step 6: Check `git diff --check` and confirm no workflow automation or real data was added.**
 - [ ] **Step 7: Commit** as `chore: establish WVM application foundation`.
 
 ## Task 2: Define canonical domain types, documents, and validation
@@ -72,13 +72,13 @@
 - Consumes: app/test gates from Task 1.
 - Produces: `BrandProfile`, `Asset`, `Template`, `TemplateVersion`, `TemplateDocument`, `Element`, `Visual`, `VisualVersion`, `LegacySourceReference`, and `AuditEvent` types; `validateTemplateDocument(input): ValidationResult`; `transitionLifecycle(state, action): LifecycleResult`; stable ID parsing/generation. Domain files import no Tauri, SQL, or UI types.
 
-- [ ] **Step 1: Write failing tests** for valid schema-versioned mm documents; text/shape/image elements; duplicate element IDs; unsupported schema; missing binding; zero, negative, non-finite, and extreme geometry; lifecycle transitions; and rejected publication of unvalidated special records.
-- [ ] **Step 2: Run `npm run test -- src/domain/__tests__`;** expect failures for missing domain contracts.
-- [ ] **Step 3: Add tagged element and binding types** from `DATA_MODEL.md`; define immutable versions and exact lifecycle states.
-- [ ] **Step 4: Implement document and transition validation** with structured field/path diagnostics; reject unknown schema versions and invalid geometry.
-- [ ] **Step 5: Run the focused tests, `npm run typecheck`, then `npm run test`;** expect all domain tests to pass.
-- [ ] **Step 6: Verify public interfaces match `DATA_MODEL.md` and add no adapter imports.**
-- [ ] **Step 7: Commit** as `feat(domain): define canonical WVM contracts`.
+- [x] **Step 1: Write failing tests** for valid schema-versioned mm documents; text/shape/image elements; duplicate element IDs; unsupported schema; missing binding; zero, negative, non-finite, and extreme geometry; lifecycle transitions; and rejected publication of unvalidated special records.
+- [x] **Step 2: Run `npm run test -- src/domain/__tests__`;** expect failures for missing domain contracts.
+- [x] **Step 3: Add tagged element and binding types** from `DATA_MODEL.md`; define immutable versions and exact lifecycle states.
+- [x] **Step 4: Implement document and transition validation** with structured field/path diagnostics; reject unknown schema versions and invalid geometry.
+- [x] **Step 5: Run the focused tests, `npm run typecheck`, then `npm run test`;** expect all domain tests to pass.
+- [x] **Step 6: Verify public interfaces match `DATA_MODEL.md` and add no adapter imports.**
+- [x] **Step 7: Commit** as `feat(domain): define canonical WVM contracts`.
 
 ## Task 3: Add SQLite schema, migrations, and repositories
 
