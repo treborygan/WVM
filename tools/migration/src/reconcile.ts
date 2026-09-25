@@ -54,7 +54,7 @@ export async function reconcileMigration(
     idCounts.set(row.id, (idCounts.get(row.id) ?? 0) + 1);
     const sourceKey = `${row.migration_batch}\u0000${row.source.source_id}`;
     if (row.source.source_id) sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
-    for (const problem of row.row_issues) issues.push({ code: problem.includes("family") ? "unsupported_family" : problem.includes("ID") ? "malformed_id" : problem.includes("source") ? "malformed_source_reference" : "malformed_row", record_id: row.id, message: problem });
+    for (const problem of row.row_issues) issues.push({ code: problem.includes("family") ? "unsupported_family" : problem.includes("ID") ? "malformed_id" : problem.includes("source") ? "malformed_source_reference" : problem.includes("required binding") ? "missing_binding" : problem.includes("invalid color token") ? "invalid_color_token" : "malformed_row", record_id: row.id, message: problem });
     if (!TEMPLATE_FAMILIES.includes(row.template_family as TemplateFamily)) {
       if (!row.row_issues.some((problem) => problem.includes("unsupported template family"))) issues.push({ code: "unsupported_family", record_id: row.id, message: `Unsupported template family: ${row.template_family}` });
       continue;

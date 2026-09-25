@@ -76,4 +76,31 @@ describe("synthetic migration reconciliation", () => {
     expect(row.fields).toEqual({});
     expect(row.row_issues).toContain("row 1: malformed field value at location");
   });
+
+  it("blocks field names that collide after normalization", () => {
+    const collision = {
+      schema_version: 1,
+      records: [{
+        id: "WVM-SYN-COLLISION", name: "Synthetic collision", visual_type: "gang",
+        template_family: "gang-standard-2up", fields: { location: "A-01", " location ": "B-02" },
+        source: { source_id: "SYN-COLLISION", source_name: "synthetic-input.json" },
+      }],
+    };
+    expect(mapStagingCatalog(collision, "synthetic-collision-batch")[0].row_issues).toContain(
+      "row 1: field key collision after normalization at location",
+    );
+  });
+
+  it("preserves raw source text exactly for later physical-source comparison", () => {
+    const rawText = " KEEP\nOUT  ";
+    const source = {
+      schema_version: 1,
+      records: [{
+        id: "WVM-SYN-RAW", name: "Synthetic raw text", visual_type: "gang",
+        template_family: "gang-standard-2up", fields: {},
+        source: { source_id: "SYN-RAW", source_name: "synthetic-input.json", raw_source_text: rawText },
+      }],
+    };
+    expect(mapStagingCatalog(source, "synthetic-raw-batch")[0].source.raw_source_text).toBe(rawText);
+  });
 });

@@ -1,5 +1,7 @@
 import { createId, parseId } from "../../../src/domain/ids";
-import type { AuditEvent, LegacySourceReference, TemplateFamily, Visual, VisualVersion } from "../../../src/domain/entities";
+import type { AuditEvent, LegacySourceReference, TemplateFamily, TemplateId, TemplateVersionId, Visual, VisualVersion } from "../../../src/domain/entities";
+import type { TemplateDocument } from "../../../src/domain/template-document";
+import { validateOptionalColorTokens } from "../../../src/domain/validation";
 import type { MigrationBaseline, MigrationReport } from "./reconcile";
 import { reconcileMigration } from "./reconcile";
 import { mapStagingCatalog, type StagedVisual } from "./staging";
@@ -7,6 +9,16 @@ import { mapStagingCatalog, type StagedVisual } from "./staging";
 export interface SelectedTemplate {
   readonly template_id: Visual["template_id"];
   readonly template_version_id: VisualVersion["template_version_id"];
+}
+
+export interface ResolvedTemplateSelection {
+  readonly template: { readonly id: TemplateId; readonly family: TemplateFamily };
+  readonly version: { readonly id: TemplateVersionId; readonly template_id: TemplateId; readonly document: TemplateDocument };
+}
+
+export interface MigrationTemplateResolver {
+  /** Reads the persisted template and version to verify both identity and family before import. */
+  getSelection(templateId: TemplateId, versionId: TemplateVersionId): Promise<ResolvedTemplateSelection | undefined>;
 }
 
 export interface MigrationImportBatch {
@@ -36,6 +48,7 @@ export interface ImportSelectedSourcesOptions {
   readonly reader: SelectedSourceReader;
   readonly baseline: MigrationBaseline;
   readonly templates: Readonly<Record<TemplateFamily, SelectedTemplate>>;
+  readonly template_resolver: MigrationTemplateResolver;
   readonly repository: MigrationImportRepository;
   readonly migration_batch: string;
   readonly now?: () => string;
@@ -64,12 +77,49 @@ function sourceState(row: StagedVisual): LegacySourceReference["validation_state
   return row.template_family === "gang-special-2up" ? "pending" : row.validation_state;
 }
 
+function requiredVisualBindings(document: TemplateDocument): readonly string[] {
+  const paths = new Set<string>();
+  const add = (binding: { readonly kind: string; readonly path?: string }): void => {
+    if (binding.kind === "binding" && binding.path?.startsWith("visual.")) paths.add(binding.path);
+  };
+  for (const element of document.elements) {
+    if (element.type === "text") {
+      add(element.content);
+      add(element.style.color);
+    } else if (element.type === "rectangle" || element.type === "band" || element.type === "background") {
+      add(element.style.fill);
+      if (element.style.stroke) add(element.style.stroke);
+    } else if (element.type === "line" || element.type === "border") {
+      add(element.style.stroke);
+    }
+  }
+  return [...paths].sort();
+}
+
+function validateRequiredBindings(row: StagedVisual, document: TemplateDocument): StagedVisual {
+  const missing = requiredVisualBindings(document).filter((path) => {
+    const field = path.slice("visual.".length);
+    const value = field === "name" ? row.name : row.fields[field];
+    return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+  });
+  const colorIssues = validateOptionalColorTokens({ accent_color: row.fields.accent_color }, `record ${row.id}`);
+  if (missing.length === 0 && colorIssues.length === 0) return row;
+  return {
+    ...row,
+    row_issues: [
+      ...row.row_issues,
+      ...missing.map((path) => `record ${row.id}: required binding ${path} has no value`),
+      ...colorIssues.map((issue) => `record ${row.id}: invalid color token at ${issue.path}`),
+    ],
+  };
+}
+
 /** Imports only explicitly selected paths; no discovery, writes, or mutation of originals is exposed. */
 export async function importSelectedSources(options: ImportSelectedSourcesOptions): Promise<MigrationImportBatch> {
   if (options.paths.length === 0 || options.paths.some((path) => !path.trim())) {
     throw new Error("Select at least one non-empty source path.");
   }
-  const rows: StagedVisual[] = [];
+  let rows: StagedVisual[] = [];
   const sourceFiles: { path: string; sha256: string; byte_length: number }[] = [];
   for (const path of options.paths) {
     const bytes = await options.reader.read(path);
@@ -81,6 +131,24 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
     sourceFiles.push({ path, sha256: digest, byte_length: bytes.byteLength });
     rows.push(...mapStagingCatalog(parseCatalog(bytes, path), options.migration_batch));
   }
+
+  const selections = new Map<TemplateFamily, ResolvedTemplateSelection>();
+  for (const family of new Set(rows.map(({ template_family }) => template_family as TemplateFamily))) {
+    const selected = options.templates[family];
+    if (!selected) continue;
+    const resolved = await options.template_resolver.getSelection(selected.template_id, selected.template_version_id);
+    if (!resolved || resolved.template.id !== selected.template_id || resolved.version.id !== selected.template_version_id || resolved.version.template_id !== resolved.template.id) {
+      throw new MigrationTemplateSelectionError(`Selected template/version for ${family} is missing or mismatched in the catalog.`);
+    }
+    if (resolved.template.family !== family) {
+      throw new MigrationTemplateSelectionError(`Selected template family ${resolved.template.family} does not match staged family ${family}.`);
+    }
+    selections.set(family, resolved);
+  }
+  rows = rows.map((row) => {
+    const selection = selections.get(row.template_family as TemplateFamily);
+    return selection ? validateRequiredBindings(row, selection.version.document) : row;
+  });
 
   const report = await reconcileMigration(rows, options.baseline);
   if (!report.can_import) throw new MigrationReconciliationError(report);
@@ -108,6 +176,7 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
       ...(typeof row.fields.location === "string" ? { location: row.fields.location } : {}),
       ...(typeof row.fields.flow === "string" ? { flow: row.fields.flow } : {}),
       ...(typeof row.fields.description === "string" ? { description: row.fields.description } : {}),
+      ...(typeof row.fields.accent_color === "string" ? { accent_color: row.fields.accent_color } : {}),
       lifecycle_state: "Draft",
       current_draft_version_id: versionId,
       created_at: timestamp,
@@ -165,6 +234,13 @@ export class MigrationSourceHashError extends Error {
   constructor(readonly selected_path: string, readonly expected_hash: string | undefined, readonly actual_hash: string) {
     super(`Selected source file hash does not match the approved baseline: ${basename(selected_path)}.`);
     this.name = "MigrationSourceHashError";
+  }
+}
+
+export class MigrationTemplateSelectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MigrationTemplateSelectionError";
   }
 }
 

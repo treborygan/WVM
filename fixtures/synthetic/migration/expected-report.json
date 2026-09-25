@@ -20,7 +20,7 @@
     "WVM-SYN-L-001"
   ],
   "record_hashes": {
-    "WVM-SYN-G-001": "58f2565701a22a8bfc955a8c330a74dab4dbb066212d318cf0c33cf9ac40e177",
+    "WVM-SYN-G-001": "de843d24f96f8a8f3b01d4064bd18b7a76746547c33c9a71be8364992a812541",
     "WVM-SYN-X-001": "1f621fb7338f86aa30c9158c6d0a6230acaf1281cbab28ddf4ebab8c5d7c2b13",
     "WVM-SYN-X-002": "240469e36ad20e297c7377d1372fee4ae93a1d91cf21c274c7e8810e6b0a6a06",
     "WVM-SYN-X-003": "69ca3ec38c876011d562e518c946345c3207cdb89261044e274304ccd84e4a99",
@@ -32,6 +32,6 @@
     "WVM-SYN-L-001": "2172217c663faa4167ba01853e4ffad25f99c408f85ef512ad730dee599cb025"
   },
   "source_file_hashes": {
-    "catalog.json": "6d2b0104b5a10b745266e39955b8e9c28383d7cc4f96ce1f6f0680e2914c12c4"
+    "catalog.json": "f442af893f0659b332afac34b074caf4709b4fa015b2722045a4ce886e1b49ec"
   }
 }

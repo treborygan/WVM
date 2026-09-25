@@ -11,7 +11,7 @@ export interface DraftVisual {
 export async function duplicateVisual(
   id: VisualId,
   repository: CatalogRepository,
-  options: { readonly now?: () => string; readonly new_id?: () => VisualId; readonly new_reference_id?: () => LegacySourceReference["id"] } = {},
+  options: { readonly now?: () => string; readonly new_id?: () => VisualId; readonly new_reference_id?: () => LegacySourceReference["id"]; readonly actor_id?: string } = {},
 ): Promise<DraftVisual> {
   const source = await repository.getById(id);
   if (!source) throw new Error(`Visual not found: ${id}`);
@@ -41,6 +41,7 @@ export async function duplicateVisual(
     version_number: 1,
     created_at: now,
     published_at: undefined,
+    created_by: options.actor_id,
     ...(family === "gang-special-2up" ? { special_validation: { state: "pending" as const } } : {}),
   };
   const copiedReferences = sourceReferences.map((reference) => ({

@@ -38,6 +38,11 @@ describe("catalog use cases", () => {
     expect(page.items[0].legacy_source).toBe("legacy ref SYN-001");
   });
 
+  it("filters directly by legacy source metadata", async () => {
+    const page = await listVisuals({ legacy_source: "SYN-001" }, repository);
+    expect(page.items.map(({ id }) => id)).toEqual(["WVM-SYN-002"]);
+  });
+
   it("loads details with current version, template family, and provenance", async () => {
     const detail = await getVisualDetail(visuals[0].id, repository);
     expect(detail).toMatchObject({ visual: visuals[0], current_version: version, template_family: "gang-standard-2up" });
@@ -61,6 +66,7 @@ describe("catalog use cases", () => {
   it("resets special Gang validation evidence when duplicating into a new draft", async () => {
     const validatedVersion = {
       ...version,
+      created_by: "original-author",
       values: { location: "B-02" },
       special_validation: { state: "validated" as const, reviewer_id: "reviewer-1", reviewed_at: "2026-01-01T00:00:00.000Z", evidence_ref: "evidence-1" },
     };
@@ -75,5 +81,6 @@ describe("catalog use cases", () => {
       now: () => "2026-01-02T00:00:00.000Z",
     });
     expect(copy.version.special_validation).toEqual({ state: "pending" });
+    expect(copy.version.created_by).toBeUndefined();
   });
 });

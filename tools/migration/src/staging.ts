@@ -47,16 +47,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeFields(value: unknown, issues: string[], row: number): Readonly<Record<string, string | number | boolean | null>> {
   if (!isRecord(value)) {
-    if (value !== undefined) issues.push(`row ${row}: malformed fields object`);
+    issues.push(`row ${row}: malformed fields object`);
     return {};
   }
   const fields: Record<string, string | number | boolean | null> = {};
+  const normalizedKeys = new Set<string>();
   for (const [key, raw] of Object.entries(value).sort(([left], [right]) => left.localeCompare(right))) {
-    if (!key.trim() || !(raw === null || typeof raw === "string" || typeof raw === "boolean" || (typeof raw === "number" && Number.isFinite(raw)))) {
+    const normalizedKey = key.trim();
+    if (!normalizedKey || !(raw === null || typeof raw === "string" || typeof raw === "boolean" || (typeof raw === "number" && Number.isFinite(raw)))) {
       issues.push(`row ${row}: malformed field value at ${key || "<empty>"}`);
       continue;
     }
-    fields[key.trim()] = typeof raw === "string" ? raw.trim().replace(/\s+/gu, " ") : raw;
+    if (normalizedKeys.has(normalizedKey)) {
+      issues.push(`row ${row}: field key collision after normalization at ${normalizedKey}`);
+      continue;
+    }
+    normalizedKeys.add(normalizedKey);
+    fields[normalizedKey] = typeof raw === "string" ? raw.trim().replace(/\s+/gu, " ") : raw;
   }
   return fields;
 }
@@ -96,7 +103,7 @@ export function mapStagingCatalog(input: unknown, migrationBatch: string): reado
         source_name: sourceName ?? "",
         ...(normalizedText(source.sheet_or_slide) ? { sheet_or_slide: normalizedText(source.sheet_or_slide) } : {}),
         ...(normalizedText(source.side) ? { side: normalizedText(source.side) } : {}),
-        ...(normalizedText(source.raw_source_text) ? { raw_source_text: normalizedText(source.raw_source_text) } : {}),
+        ...(typeof source.raw_source_text === "string" ? { raw_source_text: source.raw_source_text } : {}),
       },
       migration_batch: migrationBatch,
       validation_state: family === "gang-special-2up" ? "pending" : "unreviewed",

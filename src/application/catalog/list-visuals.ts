@@ -11,6 +11,7 @@ export interface ListVisualsQuery {
   readonly flow?: string;
   readonly description?: string;
   readonly lifecycle_state?: LifecycleState;
+  readonly legacy_source?: string;
   readonly sort_by?: VisualSortField;
   readonly sort_order?: "asc" | "desc";
   readonly page?: number;
@@ -45,7 +46,7 @@ export async function listVisuals(query: ListVisualsQuery, repository: CatalogRe
     throw new RangeError("Catalog page must be positive and page_size must be between 1 and 200.");
   }
   const records = await repository.list();
-  const filters: (keyof ListVisualsQuery)[] = ["visual_type", "template_family", "stock_class", "location", "flow", "description", "lifecycle_state"];
+  const filters: (keyof ListVisualsQuery)[] = ["visual_type", "template_family", "stock_class", "location", "flow", "description", "lifecycle_state", "legacy_source"];
   const matched = records.map(({ visual, template_family, legacy_search_text }) => ({
     visual, template_family, legacy_search_text,
     searchable: [visual.name, visual.visual_type, template_family, visual.stock_class, visual.location, visual.flow, visual.description, visual.lifecycle_state, legacy_search_text].map(normalized).join("\n"),
@@ -54,6 +55,7 @@ export async function listVisuals(query: ListVisualsQuery, repository: CatalogRe
     return filters.every((key) => {
       const expected = query[key];
       if (expected === undefined) return true;
+      if (key === "legacy_source") return normalized(record.legacy_search_text).includes(normalized(String(expected)));
       const field = key === "visual_type" ? record.visual.visual_type : key === "template_family" ? record.template_family : key === "stock_class" ? record.visual.stock_class : key === "location" ? record.visual.location : key === "flow" ? record.visual.flow : key === "description" ? record.visual.description : record.visual.lifecycle_state;
       return normalized(String(field)) === normalized(String(expected));
     });
