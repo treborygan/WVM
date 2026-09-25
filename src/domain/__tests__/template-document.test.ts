@@ -216,6 +216,42 @@ describe("TemplateDocument validation", () => {
     }
   });
 
+  it("rejects print rules whose margins leave no printable page area", () => {
+    const result = validateTemplateDocument({
+      ...validDocument,
+      print_rules: {
+        ...validDocument.print_rules,
+        margins_mm: { top: 149, right: 106, bottom: 149, left: 106 },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "print_layout_does_not_fit", path: "print_rules" }),
+      );
+    }
+  });
+
+  it("rejects gaps that exceed the printable area for the declared slots", () => {
+    const result = validateTemplateDocument({
+      ...validDocument,
+      print_rules: {
+        ...validDocument.print_rules,
+        slots: { rows: 1, columns: 3 },
+        copies_per_page: 3,
+        gap_mm: 100,
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "print_layout_does_not_fit", path: "print_rules" }),
+      );
+    }
+  });
+
   it("rejects malformed IDs on fixed image assets", () => {
     const result = validateTemplateDocument({
       ...validDocument,

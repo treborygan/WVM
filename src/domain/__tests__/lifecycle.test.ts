@@ -6,10 +6,23 @@ describe("lifecycle transitions", () => {
   it.each([
     ["Draft", "submit_for_review", "Review"],
     ["Review", "return_to_draft", "Draft"],
-    ["Review", "publish", "Published"],
     ["Published", "retire", "Retired"],
   ] as const)("transitions %s with %s to %s", (state, action, expected) => {
     expect(transitionLifecycle(state, action)).toEqual({ ok: true, state: expected });
+  });
+
+  it("requires template family context before publication", () => {
+    expect(transitionLifecycle("Review", "publish")).toMatchObject({
+      ok: false,
+      diagnostic: { code: "publication_context_required" },
+    });
+  });
+
+  it("allows a standard Gang publication with template family context", () => {
+    expect(transitionLifecycle("Review", "publish", { templateFamily: "gang-standard-2up" })).toEqual({
+      ok: true,
+      state: "Published",
+    });
   });
 
   it("rejects an illegal transition with a structured diagnostic", () => {
@@ -40,22 +53,23 @@ describe("lifecycle transitions", () => {
 
   it("blocks a special Gang record from publication until its validation is recorded", () => {
     const result = transitionLifecycle("Review", "publish", {
-      isSpecialGang: true,
-      specialValidation: { status: "pending" },
+      templateFamily: "gang-special-2up",
+      specialValidation: { state: "pending" },
     });
 
     expect(result).toMatchObject({ ok: false, diagnostic: { code: "special_record_not_validated" } });
   });
 
   it("allows a special Gang publication only with reviewer, date, and evidence", () => {
+    const specialValidation = {
+      state: "validated" as const,
+      reviewer_id: "reviewer-1",
+      reviewed_at: "2026-09-25T08:00:00.000Z",
+      evidence_ref: "validation-record-1",
+    };
     const result = transitionLifecycle("Review", "publish", {
-      isSpecialGang: true,
-      specialValidation: {
-        status: "validated",
-        reviewer_id: "reviewer-1",
-        reviewed_at: "2026-09-25T08:00:00.000Z",
-        evidence_ref: "validation-record-1",
-      },
+      templateFamily: "gang-special-2up",
+      specialValidation,
     });
 
     expect(result).toEqual({ ok: true, state: "Published" });

@@ -23,7 +23,7 @@ The TypeScript contract persists the following version-1 JSON shape (snake_case 
 
 - `schema_version` is exactly `1`; unsupported versions fail validation until an explicit document migration exists.
 - `page` contains positive `width_mm` and `height_mm`, plus `orientation` (`portrait` or `landscape`).
-- `print_rules` contains `copies_per_page`, four non-negative `margins_mm`, non-negative `gap_mm`, and `slots.rows`/`slots.columns`. Copy count equals rows × columns.
+- `print_rules` contains `copies_per_page`, four non-negative `margins_mm`, non-negative `gap_mm`, and `slots.rows`/`slots.columns`. Copy count equals rows × columns, and margins plus gaps must leave positive printable width and height for every slot.
 - `repetition` is either `{ "kind": "none" }` or a grid rule with positive rows/columns and non-negative horizontal/vertical gaps. `defaults` carries optional font and color defaults.
 - Every element has an ID, `type`, `x_mm`, `y_mm`, positive `width_mm`/`height_mm`, finite `rotation_degrees`, integer `z_index`, and boolean `visible`/`locked` flags. Negative positions are allowed for editing and are handled by publication/print rules.
 - V1 element types are `text`, `rectangle`, `band`, `background`, `line`, `border`, and `image`. Text includes typed text/color bindings and text layout style, including `fit_policy` (`none` or `shrink_to_fit`); shapes and lines carry typed fills/strokes; images carry an asset ID or the `brand.logo` binding and an explicit fit rule.
@@ -33,7 +33,7 @@ The TypeScript contract persists the following version-1 JSON shape (snake_case 
 
 ### Identity and lifecycle
 
-Existing WVM IDs are preserved as imported identities; generated IDs must be globally unique. Duplicate IDs, dangling foreign keys, unknown lifecycle states, or unsupported document schema versions fail validation. Lifecycle is exactly `Draft`, `Review`, `Published`, `Retired`. Legal transitions are Draft→Review, Review→Draft, Review→Published, Published→Retired, and Retired→Draft only by creating a new version/re-activation operation with an audit event. Published versions cannot be overwritten or deleted through application commands.
+Existing WVM IDs are preserved as imported identities; generated IDs must be globally unique. Duplicate IDs, dangling foreign keys, unknown lifecycle states, or unsupported document schema versions fail validation. Lifecycle is exactly `Draft`, `Review`, `Published`, `Retired`. Legal transitions are Draft→Review, Review→Draft, Review→Published, Published→Retired, and Retired→Draft only by creating a new version/re-activation operation with an audit event. Publishing requires template-family context so family-specific rules cannot be skipped. Published versions cannot be overwritten or deleted through application commands.
 
 The six `gang-special-2up` exception visuals carry an explicit validation state and are ineligible for trusted publication while that state is not `validated` with a recorded reviewer/date/evidence reference.
 

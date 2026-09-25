@@ -226,7 +226,7 @@ function validateElement(value: unknown, index: number, ids: Set<string>, diagno
   return valid;
 }
 
-function validatePrintRules(value: unknown, diagnostics: Diagnostic[]): void {
+function validatePrintRules(value: unknown, page: unknown, diagnostics: Diagnostic[]): void {
   const path = "print_rules";
   if (!isRecord(value)) {
     addDiagnostic(diagnostics, "print_rules_required", path, "Print rules are required.");
@@ -258,6 +258,57 @@ function validatePrintRules(value: unknown, diagnostics: Diagnostic[]): void {
       value.copies_per_page !== value.slots.rows * value.slots.columns
     ) {
       addDiagnostic(diagnostics, "print_slot_count_mismatch", path, "Copies per page must equal slot rows multiplied by columns.");
+    }
+  }
+
+  if (
+    isRecord(page) &&
+    isRecord(value.margins_mm) &&
+    isRecord(value.slots) &&
+    typeof page.width_mm === "number" &&
+    Number.isFinite(page.width_mm) &&
+    page.width_mm > 0 &&
+    typeof page.height_mm === "number" &&
+    Number.isFinite(page.height_mm) &&
+    page.height_mm > 0 &&
+    typeof value.gap_mm === "number" &&
+    Number.isFinite(value.gap_mm) &&
+    value.gap_mm >= 0 &&
+    typeof value.margins_mm.left === "number" &&
+    Number.isFinite(value.margins_mm.left) &&
+    value.margins_mm.left >= 0 &&
+    typeof value.margins_mm.right === "number" &&
+    Number.isFinite(value.margins_mm.right) &&
+    value.margins_mm.right >= 0 &&
+    typeof value.margins_mm.top === "number" &&
+    Number.isFinite(value.margins_mm.top) &&
+    value.margins_mm.top >= 0 &&
+    typeof value.margins_mm.bottom === "number" &&
+    Number.isFinite(value.margins_mm.bottom) &&
+    value.margins_mm.bottom >= 0 &&
+    typeof value.slots.columns === "number" &&
+    Number.isInteger(value.slots.columns) &&
+    value.slots.columns > 0 &&
+    typeof value.slots.rows === "number" &&
+    Number.isInteger(value.slots.rows) &&
+    value.slots.rows > 0
+  ) {
+    const occupiedWidth =
+      value.margins_mm.left + value.margins_mm.right + value.gap_mm * (value.slots.columns - 1);
+    const occupiedHeight =
+      value.margins_mm.top + value.margins_mm.bottom + value.gap_mm * (value.slots.rows - 1);
+    if (
+      !Number.isFinite(occupiedWidth) ||
+      !Number.isFinite(occupiedHeight) ||
+      occupiedWidth >= page.width_mm ||
+      occupiedHeight >= page.height_mm
+    ) {
+      addDiagnostic(
+        diagnostics,
+        "print_layout_does_not_fit",
+        path,
+        "Margins and gaps must leave positive printable width and height for every slot.",
+      );
     }
   }
 }
@@ -305,7 +356,7 @@ export function validateTemplateDocument(input: unknown): ValidationResult {
     }
   }
 
-  validatePrintRules(input.print_rules, diagnostics);
+  validatePrintRules(input.print_rules, input.page, diagnostics);
   validateRepetition(input.repetition, diagnostics);
   if (input.defaults !== undefined) {
     if (!isRecord(input.defaults)) {
