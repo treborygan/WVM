@@ -8,8 +8,8 @@ import { listVisuals } from "../../src/application/catalog/list-visuals";
 import type { CatalogRepository } from "../../src/application/catalog/ports";
 
 const visuals: Visual[] = [
-  { id: "WVM-SYN-002" as Visual["id"], name: "Beta marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "B-02", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "WVM-SYN-001" as Visual["id"], name: "Alpha marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "A-01", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "WVM-SYN-002" as Visual["id"], name: "Beta marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "B-02", flow: "SYN-FLOW-02", stock_class: "synthetic-stock", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "WVM-SYN-001" as Visual["id"], name: "Alpha marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "A-01", flow: "SYN-FLOW-01", stock_class: "synthetic-stock", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
 ];
 const version: VisualVersion = {
   id: createId("visual_version"), visual_id: visuals[0].id, version_number: 1,
@@ -17,7 +17,7 @@ const version: VisualVersion = {
   created_at: "2026-01-01T00:00:00.000Z",
 };
 const repository: CatalogRepository = {
-  list: async () => visuals.map((visual) => ({ visual, template_family: "gang-standard-2up", legacy_search_text: "synthetic source" })),
+  list: async () => visuals.map((visual) => ({ visual, template_family: "gang-standard-2up", legacy_search_text: visual.id === "WVM-SYN-002" ? "legacy ref SYN-001" : "legacy ref SYN-002" })),
   getById: async (id) => visuals.find((visual) => visual.id === id),
   getCurrentVersion: async () => version,
   getSourceReferences: async () => [{ id: createId("legacy_source_reference"), visual_id: visuals[0].id, source_id: "SYN-001", source_name: "synthetic.pptx", migration_batch: "synthetic", validation_state: "pending" }],
@@ -30,6 +30,12 @@ describe("catalog use cases", () => {
     const page = await listVisuals({ search: "marker", sort_by: "name", sort_order: "asc", page: 1, page_size: 1 }, repository);
     expect(page.items.map(({ name }) => name)).toEqual(["Alpha marker"]);
     expect(page).toMatchObject({ total: 2, page: 1, page_size: 1, total_pages: 2 });
+  });
+
+  it("filters by catalog fields and searches legacy source metadata without loading versions", async () => {
+    const page = await listVisuals({ search: "SYN-001", flow: "SYN-FLOW-02", location: "B-02", stock_class: "synthetic-stock", template_family: "gang-standard-2up", lifecycle_state: "Draft" }, repository);
+    expect(page.items.map(({ id }) => id)).toEqual(["WVM-SYN-002"]);
+    expect(page.items[0].legacy_source).toBe("legacy ref SYN-001");
   });
 
   it("loads details with current version, template family, and provenance", async () => {
