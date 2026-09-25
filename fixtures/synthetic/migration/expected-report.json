@@ -1,0 +1,37 @@
+{
+  "total_count": 10,
+  "counts_by_family": {
+    "gang-standard-2up": 1,
+    "gang-special-2up": 6,
+    "flow-sticker-12up": 1,
+    "stand-standard-3up": 1,
+    "stand-level-instruction-3up": 1
+  },
+  "record_ids": [
+    "WVM-SYN-G-001",
+    "WVM-SYN-X-001",
+    "WVM-SYN-X-002",
+    "WVM-SYN-X-003",
+    "WVM-SYN-X-004",
+    "WVM-SYN-X-005",
+    "WVM-SYN-X-006",
+    "WVM-SYN-F-001",
+    "WVM-SYN-S-001",
+    "WVM-SYN-L-001"
+  ],
+  "record_hashes": {
+    "WVM-SYN-G-001": "58f2565701a22a8bfc955a8c330a74dab4dbb066212d318cf0c33cf9ac40e177",
+    "WVM-SYN-X-001": "1f621fb7338f86aa30c9158c6d0a6230acaf1281cbab28ddf4ebab8c5d7c2b13",
+    "WVM-SYN-X-002": "240469e36ad20e297c7377d1372fee4ae93a1d91cf21c274c7e8810e6b0a6a06",
+    "WVM-SYN-X-003": "69ca3ec38c876011d562e518c946345c3207cdb89261044e274304ccd84e4a99",
+    "WVM-SYN-X-004": "eb814e4be9474cd8f42da9b31b7758bf8227004eefbae5b8d420effb2295a765",
+    "WVM-SYN-X-005": "4b13263f4040823131357279f16c66e3dc956414d5581a808080235adc3ee756",
+    "WVM-SYN-X-006": "4fbbc1ea9e6384dbaeb8f1333749ac56e0ec470a8582dd7fb7c614ec9485be14",
+    "WVM-SYN-F-001": "29c089083f63ad30d574b6e464938a430b0940efa6600af9ee75b8e28ee11b7f",
+    "WVM-SYN-S-001": "be7e75ae748cd9cbe58e982d83569ebf72b5dafac61957b019b81e14420d6e2a",
+    "WVM-SYN-L-001": "2172217c663faa4167ba01853e4ffad25f99c408f85ef512ad730dee599cb025"
+  },
+  "source_file_hashes": {
+    "catalog.json": "6d2b0104b5a10b745266e39955b8e9c28383d7cc4f96ce1f6f0680e2914c12c4"
+  }
+}
