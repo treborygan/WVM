@@ -79,19 +79,43 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && hexColorPattern.test(value);
+}
+
+function addInvalidColorDiagnostic(diagnostics: Diagnostic[], path: string): void {
+  addDiagnostic(
+    diagnostics,
+    "color_literal_invalid",
+    path,
+    "A literal color must use #RGB, #RGBA, #RRGGBB, or #RRGGBBAA hexadecimal syntax.",
+  );
+}
+
+export function validateOptionalColorTokens(input: unknown, pathPrefix = ""): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  if (!isRecord(input)) {
+    addDiagnostic(diagnostics, "color_tokens_invalid", pathPrefix, "Color tokens must be supplied in an object.");
+    return diagnostics;
+  }
+
+  for (const property of ["primary_color", "accent_color"] as const) {
+    const value = input[property];
+    if (value !== undefined && !isHexColor(value)) {
+      addInvalidColorDiagnostic(diagnostics, pathPrefix ? `${pathPrefix}.${property}` : property);
+    }
+  }
+  return diagnostics;
+}
+
 function validateColorBinding(value: unknown, path: string, diagnostics: Diagnostic[]): value is ColorBinding {
   if (!isRecord(value)) {
     addDiagnostic(diagnostics, "binding_required", path, "A color binding is required.");
     return false;
   }
   if (value.kind === "literal") {
-    if (typeof value.value === "string" && hexColorPattern.test(value.value)) return true;
-    addDiagnostic(
-      diagnostics,
-      "color_literal_invalid",
-      path,
-      "A literal color must use #RGB, #RGBA, #RRGGBB, or #RRGGBBAA hexadecimal syntax.",
-    );
+    if (isHexColor(value.value)) return true;
+    addInvalidColorDiagnostic(diagnostics, path);
     return false;
   }
   if (value.kind === "binding" && colorBindingPaths.has(String(value.path))) return true;
@@ -373,13 +397,19 @@ export function validateTemplateDocument(input: unknown): ValidationResult {
       addDiagnostic(diagnostics, "defaults_invalid", "defaults", "Document defaults must be an object.");
     } else {
       for (const property of ["font_family", "text_color", "fill_color"] as const) {
-        if (input.defaults[property] !== undefined && !isNonEmptyString(input.defaults[property])) {
+        if (property === "font_family" && input.defaults[property] !== undefined && !isNonEmptyString(input.defaults[property])) {
           addDiagnostic(
             diagnostics,
             "defaults_invalid",
             `defaults.${property}`,
             "Optional defaults must be non-empty strings when provided.",
           );
+        } else if (
+          (property === "text_color" || property === "fill_color") &&
+          input.defaults[property] !== undefined &&
+          !isHexColor(input.defaults[property])
+        ) {
+          addInvalidColorDiagnostic(diagnostics, `defaults.${property}`);
         }
       }
     }

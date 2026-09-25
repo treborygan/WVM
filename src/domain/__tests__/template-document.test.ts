@@ -86,6 +86,20 @@ describe("TemplateDocument validation", () => {
     }
   });
 
+  it.each(["text_color", "fill_color"] as const)("rejects malformed %s defaults", (property) => {
+    const result = validateTemplateDocument({
+      ...validDocument,
+      defaults: { [property]: "definitely-not-a-color" },
+    });
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "color_literal_invalid", path: `defaults.${property}` }),
+      );
+    }
+  });
+
   it("allows off-page element positions to remain editable", () => {
     const result = validateTemplateDocument({
       ...validDocument,

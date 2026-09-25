@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createId, parseId } from "../ids";
 import { validateTemplateDocument } from "../validation";
+import { validateOptionalColorTokens } from "../validation";
 import type {
   Asset,
   AuditEvent,
@@ -33,6 +34,15 @@ describe("canonical domain IDs", () => {
 });
 
 describe("entity contracts", () => {
+  it("rejects malformed optional brand and visual color tokens", () => {
+    expect(validateOptionalColorTokens({ primary_color: "definitely-not-a-color" })).toContainEqual(
+      expect.objectContaining({ code: "color_literal_invalid", path: "primary_color" }),
+    );
+    expect(validateOptionalColorTokens({ accent_color: "definitely-not-a-color" })).toContainEqual(
+      expect.objectContaining({ code: "color_literal_invalid", path: "accent_color" }),
+    );
+  });
+
   it("exports the canonical identity and version entity contracts", () => {
     const validated = validateTemplateDocument({
       schema_version: 1,

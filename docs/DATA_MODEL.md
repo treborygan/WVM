@@ -29,6 +29,8 @@ The TypeScript contract persists the following version-1 JSON shape (snake_case 
 - V1 element types are `text`, `rectangle`, `band`, `background`, `line`, `border`, and `image`. Text includes typed text/color bindings and text layout style, including `fit_policy` (`none` or `shrink_to_fit`); shapes and lines carry typed fills/strokes; images carry an asset ID or the `brand.logo` binding and an explicit fit rule.
 - Text bindings accept only literal text or allow-listed `visual.name`, `visual.location`, `visual.flow`, `visual.description`, and `visual.stock_class` paths. Literal colors use `#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA` hexadecimal syntax; bound colors accept `visual.accent_color`/`brand.primary_color`. Image bindings accept an asset ID or `brand.logo`.
 
+Template defaults `text_color` and `fill_color` use the same literal color syntax. Optional `BrandProfile.primary_color`, `BrandProfile.accent_color`, and `Visual.accent_color` tokens must pass `validateOptionalColorTokens` before persistence or render-time binding resolution.
+
 `validateTemplateDocument(input)` accepts untrusted JSON and returns either a typed document or structured diagnostics (`code`, JSON-style `path`, `message`, and severity). It rejects unknown schema versions, duplicate element IDs, missing/unsupported bindings, invalid page/print data, non-finite geometry, non-positive element dimensions, and values outside JavaScript's safe integer range. It does not reject off-page positions; publication and print policy decide how those are handled.
 
 ### Identity and lifecycle
