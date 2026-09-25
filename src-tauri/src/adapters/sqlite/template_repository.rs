@@ -134,14 +134,14 @@ impl TemplateRepository {
         if version.version_number <= 0 {
             return Err(invalid_data("Template version numbers must be positive."));
         }
-        let next_version: i64 = transaction.query_row(
-            "SELECT COALESCE(MAX(version_number), 0) + 1 FROM template_versions WHERE template_id = ?1",
+        let latest_version: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(version_number), 0) FROM template_versions WHERE template_id = ?1",
             [&version.template_id],
             |row| row.get(0),
         )?;
-        if version.version_number != next_version {
+        if version.version_number <= latest_version {
             return Err(invalid_data(
-                "Template version numbers must increase by exactly one.",
+                "Template version numbers must increase monotonically.",
             ));
         }
         if audit.entity_kind != "template_version"
@@ -159,17 +159,10 @@ impl TemplateRepository {
             params![version.id, version.template_id, version.version_number, document_json, version.created_by,
                 version.created_at, version.published_at],
         )?;
-        if let Some(published_at) = &version.published_at {
-            transaction.execute(
-                "UPDATE templates SET active_published_version_id = ?1, lifecycle_state = 'Published', updated_at = ?2 WHERE id = ?3",
-                params![version.id, published_at, version.template_id],
-            )?;
-        } else {
-            transaction.execute(
-                "UPDATE templates SET updated_at = ?1 WHERE id = ?2",
-                params![version.created_at, version.template_id],
-            )?;
-        }
+        transaction.execute(
+            "UPDATE templates SET updated_at = ?1 WHERE id = ?2",
+            params![version.created_at, version.template_id],
+        )?;
         append_audit_event(transaction, audit)?;
         Ok(())
     }

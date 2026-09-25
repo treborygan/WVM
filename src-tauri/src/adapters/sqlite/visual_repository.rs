@@ -192,14 +192,14 @@ impl VisualRepository {
                 "Visual version number and structured values are invalid.",
             ));
         }
-        let next_version: i64 = transaction.query_row(
-            "SELECT COALESCE(MAX(version_number), 0) + 1 FROM visual_versions WHERE visual_id = ?1",
+        let latest_version: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(version_number), 0) FROM visual_versions WHERE visual_id = ?1",
             [&version.visual_id],
             |row| row.get(0),
         )?;
-        if version.version_number != next_version {
+        if version.version_number <= latest_version {
             return Err(invalid_data(
-                "Visual version numbers must increase by exactly one.",
+                "Visual version numbers must increase monotonically.",
             ));
         }
         if audit.entity_kind != "visual_version"
@@ -238,25 +238,12 @@ impl VisualRepository {
                 version.special_validation.as_ref().map(serde_json::to_string).transpose()?,
                 version.created_by, version.created_at, version.published_at],
         )?;
-        let pointer_column = if version.published_at.is_some() {
-            "current_published_version_id"
-        } else {
-            "current_draft_version_id"
-        };
-        let sql =
-            format!("UPDATE visuals SET {pointer_column} = ?1, updated_at = ?2 WHERE id = ?3");
         let updated = transaction.execute(
-            &sql,
-            params![version.id, version.created_at, version.visual_id],
+            "UPDATE visuals SET updated_at = ?1 WHERE id = ?2",
+            params![version.created_at, version.visual_id],
         )?;
         if updated != 1 {
             return Err(invalid_data("Visual for the new version was not found."));
-        }
-        if version.published_at.is_some() {
-            transaction.execute(
-                "UPDATE visuals SET lifecycle_state = 'Published' WHERE id = ?1",
-                [&version.visual_id],
-            )?;
         }
         append_audit_event(transaction, audit)?;
         Ok(())
