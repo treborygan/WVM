@@ -113,13 +113,13 @@
 - Consumes: domain and repositories from Tasks 2–3.
 - Produces: `listVisuals(query): Page<VisualSummary>`, `getVisualDetail(id): VisualDetail`, `duplicateVisual(id): DraftVisual`; staging mapper; `reconcileMigration(staging, baseline): MigrationReport`; import command that preserves source refs and blocks count/hash drift. Import accepts operator-selected private input paths and never expects source files in Git.
 
-- [ ] **Step 1: Write failing tests** for search/filter/sort, detail loading, duplicate identity/content, stable legacy IDs, provenance, count/hash mismatch, duplicate IDs, malformed source rows, and all six synthetic special-exception flags.
-- [ ] **Step 2: Run `npm run test -- tests/migration tests/application/catalog.test.ts`;** expect failures before the use cases/importer exist.
-- [ ] **Step 3: Implement catalog query/duplicate use cases** against repository interfaces; duplicate creates a new Draft identity and retains selected provenance.
-- [ ] **Step 4: Implement staging normalization and reconciliation** for POC-shaped inputs, producing a machine-readable report and rejecting unexplained drift.
-- [ ] **Step 5: Implement transactional import** with preserved IDs/references and explicit manual-validation state for `gang-special-2up` records.
-- [ ] **Step 6: Run focused tests, `npm run typecheck`, and `cargo test`;** scan fixtures to confirm they contain only generated data.
-- [ ] **Step 7: Commit** as `feat(catalog): add migration and read workflows`.
+- [x] **Step 1: Write failing tests** for search/filter/sort, detail loading, duplicate identity/content, stable legacy IDs, provenance, count/hash mismatch, duplicate IDs, malformed source rows, and all six synthetic special-exception flags.
+- [x] **Step 2: Run `npm run test -- tests/migration tests/application/catalog.test.ts`;** expect failures before the use cases/importer exist.
+- [x] **Step 3: Implement catalog query/duplicate use cases** against repository interfaces; duplicate creates a new Draft identity and retains selected provenance.
+- [x] **Step 4: Implement staging normalization and reconciliation** for POC-shaped inputs, producing a machine-readable report and rejecting unexplained drift.
+- [x] **Step 5: Implement transactional import** with preserved IDs/references and explicit manual-validation state for `gang-special-2up` records.
+- [x] **Step 6: Run focused tests, `npm run typecheck`, and `cargo test`;** scan fixtures to confirm they contain only generated data.
+- [x] **Step 7: Commit** as `feat(catalog): add migration and read workflows`.
 
 ## Task 5: Implement the editor viewport and physical geometry
 

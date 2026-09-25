@@ -12,7 +12,7 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 
 ## Status
 
-Tasks 1–3 provide the verified application foundation, canonical TypeScript domain contracts, repository ports, and local SQLite persistence with transactional migrations and immutable version records. Catalog workflows, migration/import, editor, renderer, PDF, print, and post-V1 integrations remain unimplemented.
+Tasks 1–3 provide the verified application foundation, canonical TypeScript domain contracts, repository ports, and local SQLite persistence with transactional migrations and immutable version records. Task 4 adds catalog read/duplicate workflows and a synthetic-tested private migration staging, reconciliation, and import boundary. The editor, renderer, PDF, print, and post-V1 integrations remain unimplemented.
 
 ## Development
 
