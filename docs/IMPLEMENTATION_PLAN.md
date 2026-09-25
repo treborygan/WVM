@@ -59,7 +59,7 @@
 - [x] **Step 4: Implement the minimal `App` shell** and synthetic fixture policy; add no product operations.
 - [x] **Step 5: Run `npm run test -- tests/smoke/app.test.tsx`, `npm run typecheck`, `npm run build`, and `cargo test`;** expect the smoke test and all configured checks to pass.
 - [x] **Step 6: Check `git diff --check` and confirm no workflow automation or real data was added.**
-- [ ] **Step 7: Commit** as `chore: establish WVM application foundation`.
+- [x] **Step 7: Commit** as `chore: establish WVM application foundation` (`a8bfd81`).
 
 ## Task 2: Define canonical domain types, documents, and validation
 
@@ -92,13 +92,13 @@
 - Consumes: domain contracts from Task 2.
 - Produces: repository interfaces for create/get/list/update-version operations, transaction boundary, numbered SQLite migration, foreign-key-enabled local database, temporary-database tests. SQLite row types remain within Rust adapters.
 
-- [ ] **Step 1: Write failing repository contract tests** for stable IDs, searchable fields, foreign-key enforcement, immutable version inserts, atomic version/current-pointer/audit writes, and rollback on injected failure.
-- [ ] **Step 2: Run `cargo test repository_contract`;** expect failure while the adapter/schema is absent.
-- [ ] **Step 3: Implement the initial schema** for brands, assets, templates, template versions, visuals, visual versions, legacy source references, audit events, and schema version. Add unique version indexes and catalog indexes.
-- [ ] **Step 4: Implement repository adapters and transaction handling** that map rows to Task 2 domain types and validate JSON on read/write.
-- [ ] **Step 5: Run `cargo test`, `npm run test -- src/application/__tests__/repository-contract.test.ts`, and `npm run typecheck`;** expect all checks to pass.
-- [ ] **Step 6: Inject a migration failure in a temporary database** and assert the schema remains at its prior version; verify `PRAGMA foreign_keys` is enabled on each connection.
-- [ ] **Step 7: Commit** as `feat(storage): add local SQLite repositories`.
+- [x] **Step 1: Write failing repository contract tests** for stable IDs, searchable fields, foreign-key enforcement, immutable version inserts, atomic version/current-pointer/audit writes, and rollback on injected failure.
+- [x] **Step 2: Run `cargo test repository_contract`;** expect failure while the adapter/schema is absent.
+- [x] **Step 3: Implement the initial schema** for brands, assets, templates, template versions, visuals, visual versions, legacy source references, audit events, and schema version. Add unique version indexes and catalog indexes.
+- [x] **Step 4: Implement repository adapters and transaction handling** that map rows to Task 2 domain types and validate JSON on read/write.
+- [x] **Step 5: Run `cargo test`, `npm run test -- src/application/__tests__/repository-contract.test.ts`, and `npm run typecheck`;** expect all checks to pass.
+- [x] **Step 6: Inject a migration failure in a temporary database** and assert the schema remains at its prior version; verify `PRAGMA foreign_keys` is enabled on each connection.
+- [x] **Step 7: Commit** as `feat(storage): add local SQLite repositories`.
 
 ## Task 4: Build private migration import and catalog read workflows
 

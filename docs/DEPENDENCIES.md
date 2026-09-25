@@ -1,6 +1,6 @@
 # Dependency and licence register
 
-Task 1 uses only the application-shell and test/build dependencies below. Versions are exact in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`.
+Direct application dependencies and development/test dependencies are listed below. Versions are exact in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`.
 
 ## Direct application dependencies
 
@@ -10,6 +10,9 @@ Task 1 uses only the application-shell and test/build dependencies below. Versio
 | React DOM | 19.3.0 | Mount React into the webview DOM | MIT | Direct runtime |
 | `@tauri-apps/api` | 2.11.1 | Typed frontend API boundary for the Tauri host | Apache-2.0 OR MIT | Direct runtime |
 | `tauri` | 2.11.6 | Rust desktop application host | Apache-2.0 OR MIT | Direct runtime |
+| `rusqlite` | 0.40.2 | Local SQLite persistence with bundled SQLite | MIT | Direct runtime |
+| `serde` | 1.0.229 | Serialize adapter records and structured data | Apache-2.0 OR MIT | Direct runtime |
+| `serde_json` | 1.0.151 | Persist and validate schema-versioned JSON documents | Apache-2.0 OR MIT | Direct runtime |
 
 ## Direct development and test dependencies
 
@@ -24,6 +27,7 @@ Task 1 uses only the application-shell and test/build dependencies below. Versio
 | jsdom | 30.1.1 | Browser-like DOM test environment | MIT | Direct test |
 | React Testing Library | 16.3.3 | User-facing React render assertions | MIT | Direct test |
 | `@testing-library/jest-dom` | 7.0.1 | Accessible DOM matchers | MIT | Direct test |
+| `tempfile` | 3.27.0 | Isolated temporary SQLite databases in Rust tests | Apache-2.0 OR MIT | Direct test |
 | React type definitions | 19.3.0 | TypeScript declarations for React | MIT | Direct development |
 | React DOM type definitions | 19.3.0 | TypeScript declarations for React DOM | MIT | Direct development |
 
@@ -40,4 +44,4 @@ Transitive packages are resolved and pinned by the committed npm and Cargo lockf
 
 ## Scope boundary
 
-No component library, database crate, renderer library, AI package, MCP package, or SharePoint/Microsoft Graph package is included. SQLite remains the accepted local V1 system of record but is intentionally deferred to the storage task. SharePoint, MCP, and AI remain post-V1 adapters.
+No component library, renderer library, AI package, MCP package, or SharePoint/Microsoft Graph package is included. Local SQLite access is implemented with the bundled SQLite feature of `rusqlite`; application data must stay in the platform-local application-data directory. SharePoint, MCP, and AI remain post-V1 adapters.

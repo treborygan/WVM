@@ -12,7 +12,7 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 
 ## Status
 
-The verified Task 1 foundation is in place. Task 2 now defines canonical TypeScript domain entities, schema-versioned millimetre template documents, typed bindings, structured validation, and lifecycle transition rules. Catalog workflows, SQLite persistence, migration/import, editor, renderer, PDF, print, and post-V1 integrations remain unimplemented.
+Tasks 1–3 provide the verified application foundation, canonical TypeScript domain contracts, repository ports, and local SQLite persistence with transactional migrations and immutable version records. Catalog workflows, migration/import, editor, renderer, PDF, print, and post-V1 integrations remain unimplemented.
 
 ## Development
 
