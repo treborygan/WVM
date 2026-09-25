@@ -592,7 +592,10 @@ fn repository_contract_blocks_unvalidated_special_visual_publication() {
              'special-template-version', '{}', ?3, '2026-09-25T08:00:00.000Z', '2026-09-25T08:00:00.000Z')",
             params![id, version_number, evidence.to_string()],
         );
-        assert!(result.is_err(), "database trigger accepted invalid evidence: {id}");
+        assert!(
+            result.is_err(),
+            "database trigger accepted invalid evidence: {id}"
+        );
     }
 
     version.special_validation = Some(json!({
@@ -647,7 +650,11 @@ fn repository_contract_rejects_nested_visual_version_values() {
                 &audit("visual-audit-invalid-value", &version.id),
             )
         });
-        assert!(result.is_err(), "accepted nested visual value: {}", version.values);
+        assert!(
+            result.is_err(),
+            "accepted nested visual value: {}",
+            version.values
+        );
     }
 }
 

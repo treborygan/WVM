@@ -672,22 +672,22 @@ mod validation_tests {
             "defaults": {},
             "elements": []
         });
-        let unsafe = json!(9_007_199_254_740_992_u64);
+        let unsafe_number = json!(9_007_199_254_740_992_u64);
         let mut cases = Vec::new();
         let mut boundary = valid.clone();
         boundary["page"]["width_mm"] = json!(9_007_199_254_740_991_u64);
         assert!(validate_template_document(&boundary).is_ok());
 
         let mut page = valid.clone();
-        page["page"]["width_mm"] = unsafe.clone();
+        page["page"]["width_mm"] = unsafe_number.clone();
         cases.push(page);
 
         let mut margin = valid.clone();
-        margin["print_rules"]["margins_mm"]["left"] = unsafe.clone();
+        margin["print_rules"]["margins_mm"]["left"] = unsafe_number.clone();
         cases.push(margin);
 
         let mut gap = valid.clone();
-        gap["print_rules"]["gap_mm"] = unsafe.clone();
+        gap["print_rules"]["gap_mm"] = unsafe_number.clone();
         cases.push(gap);
 
         let mut repetition = valid.clone();
@@ -695,19 +695,22 @@ mod validation_tests {
             "kind": "grid",
             "rows": 1,
             "columns": 1,
-            "gap_x_mm": unsafe.clone(),
+            "gap_x_mm": unsafe_number.clone(),
             "gap_y_mm": 0
         });
         cases.push(repetition);
 
         let mut style = valid.clone();
         style["elements"] = json!([{
-            "style": { "font_size_pt": unsafe }
+            "style": { "font_size_pt": unsafe_number }
         }]);
         cases.push(style);
 
         for document in cases {
-            assert!(validate_template_document(&document).is_err(), "accepted {document}");
+            assert!(
+                validate_template_document(&document).is_err(),
+                "accepted {document}"
+            );
         }
     }
 }
