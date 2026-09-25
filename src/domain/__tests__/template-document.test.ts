@@ -56,6 +56,36 @@ describe("TemplateDocument validation", () => {
     }
   });
 
+  it.each(["#abc", "#abcd", "#a1b2c3", "#a1b2c3d4"])("accepts a hex color literal %s", (color) => {
+    const element = validDocument.elements[0];
+    const result = validateTemplateDocument({
+      ...validDocument,
+      elements: [{ ...element, style: { ...element.style, color: { kind: "literal", value: color } } }],
+    });
+
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects malformed literal colors with a structured diagnostic", () => {
+    const element = validDocument.elements[0];
+    const result = validateTemplateDocument({
+      ...validDocument,
+      elements: [
+        {
+          ...element,
+          style: { ...element.style, color: { kind: "literal", value: "definitely-not-a-color" } },
+        },
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "color_literal_invalid", path: "elements[0].style.color" }),
+      );
+    }
+  });
+
   it("allows off-page element positions to remain editable", () => {
     const result = validateTemplateDocument({
       ...validDocument,

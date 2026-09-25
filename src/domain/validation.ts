@@ -25,6 +25,7 @@ const textBindingPaths = new Set([
   "visual.stock_class",
 ]);
 const colorBindingPaths = new Set(["visual.accent_color", "brand.primary_color"]);
+const hexColorPattern = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i;
 const elementTypes = new Set(["text", "rectangle", "band", "background", "line", "border", "image"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,7 +84,16 @@ function validateColorBinding(value: unknown, path: string, diagnostics: Diagnos
     addDiagnostic(diagnostics, "binding_required", path, "A color binding is required.");
     return false;
   }
-  if (value.kind === "literal" && isNonEmptyString(value.value)) return true;
+  if (value.kind === "literal") {
+    if (typeof value.value === "string" && hexColorPattern.test(value.value)) return true;
+    addDiagnostic(
+      diagnostics,
+      "color_literal_invalid",
+      path,
+      "A literal color must use #RGB, #RGBA, #RRGGBB, or #RRGGBBAA hexadecimal syntax.",
+    );
+    return false;
+  }
   if (value.kind === "binding" && colorBindingPaths.has(String(value.path))) return true;
   addDiagnostic(diagnostics, "binding_required", path, "Provide a color literal or an allowed color binding.");
   return false;
