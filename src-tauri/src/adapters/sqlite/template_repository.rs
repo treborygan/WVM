@@ -240,6 +240,11 @@ fn to_sql_conversion_error(error: serde_json::Error) -> rusqlite::Error {
 }
 
 fn validate_template_document(document: &Value) -> StorageResult<String> {
+    if !numbers_within_safe_range(document) {
+        return Err(invalid_data(
+            "TemplateDocument numbers must remain within JavaScript's safe integer range.",
+        ));
+    }
     let root = document
         .as_object()
         .ok_or_else(|| invalid_data("TemplateDocument must be a JSON object."))?;
@@ -428,6 +433,18 @@ fn validate_template_document(document: &Value) -> StorageResult<String> {
     }
 
     Ok(serde_json::to_string(document)?)
+}
+
+fn numbers_within_safe_range(value: &Value) -> bool {
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    match value {
+        Value::Number(number) => number
+            .as_f64()
+            .is_some_and(|value| value.is_finite() && value.abs() <= MAX_SAFE_INTEGER),
+        Value::Array(values) => values.iter().all(numbers_within_safe_range),
+        Value::Object(values) => values.values().all(numbers_within_safe_range),
+        Value::Null | Value::Bool(_) | Value::String(_) => true,
+    }
 }
 
 fn valid_element_content(item: &serde_json::Map<String, Value>) -> bool {
@@ -638,5 +655,59 @@ mod validation_tests {
             .expect("object")
             .remove("repetition");
         assert!(validate_template_document(&invalid_element).is_err());
+    }
+
+    #[test]
+    fn rejects_numbers_outside_javascript_safe_range_everywhere_in_the_document() {
+        let valid = json!({
+            "schema_version": 1,
+            "page": { "width_mm": 210, "height_mm": 297, "orientation": "portrait" },
+            "print_rules": {
+                "copies_per_page": 1,
+                "margins_mm": { "top": 5, "right": 5, "bottom": 5, "left": 5 },
+                "gap_mm": 0,
+                "slots": { "rows": 1, "columns": 1 }
+            },
+            "repetition": { "kind": "none" },
+            "defaults": {},
+            "elements": []
+        });
+        let unsafe = json!(9_007_199_254_740_992_u64);
+        let mut cases = Vec::new();
+        let mut boundary = valid.clone();
+        boundary["page"]["width_mm"] = json!(9_007_199_254_740_991_u64);
+        assert!(validate_template_document(&boundary).is_ok());
+
+        let mut page = valid.clone();
+        page["page"]["width_mm"] = unsafe.clone();
+        cases.push(page);
+
+        let mut margin = valid.clone();
+        margin["print_rules"]["margins_mm"]["left"] = unsafe.clone();
+        cases.push(margin);
+
+        let mut gap = valid.clone();
+        gap["print_rules"]["gap_mm"] = unsafe.clone();
+        cases.push(gap);
+
+        let mut repetition = valid.clone();
+        repetition["repetition"] = json!({
+            "kind": "grid",
+            "rows": 1,
+            "columns": 1,
+            "gap_x_mm": unsafe.clone(),
+            "gap_y_mm": 0
+        });
+        cases.push(repetition);
+
+        let mut style = valid.clone();
+        style["elements"] = json!([{
+            "style": { "font_size_pt": unsafe }
+        }]);
+        cases.push(style);
+
+        for document in cases {
+            assert!(validate_template_document(&document).is_err(), "accepted {document}");
+        }
     }
 }

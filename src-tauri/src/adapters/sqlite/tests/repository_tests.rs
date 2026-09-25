@@ -1,6 +1,6 @@
 use std::io;
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -490,7 +490,7 @@ fn repository_contract_upgrades_existing_v1_databases_with_special_publication_g
     drop(connection);
 
     let database = SqliteDatabase::open(&path).expect("database upgrades");
-    assert_eq!(database.schema_version().expect("schema version"), 2);
+    assert_eq!(database.schema_version().expect("schema version"), 3);
     let connection = database.connect().expect("connection opens");
     let trigger_count: i64 = connection
         .query_row(
@@ -554,6 +554,47 @@ fn repository_contract_blocks_unvalidated_special_visual_publication() {
         [],
     ).is_err());
 
+    for (id, version_number, evidence) in [
+        (
+            "special-visual-numeric-reviewer",
+            2_i64,
+            json!({
+                "state": "validated",
+                "reviewer_id": 123,
+                "reviewed_at": "2026-09-25T08:00:00.000Z",
+                "evidence_ref": "synthetic-evidence"
+            }),
+        ),
+        (
+            "special-visual-object-evidence",
+            3_i64,
+            json!({
+                "state": "validated",
+                "reviewer_id": "reviewer-1",
+                "reviewed_at": "2026-09-25T08:00:00.000Z",
+                "evidence_ref": { "ref": "synthetic-evidence" }
+            }),
+        ),
+        (
+            "special-visual-24-hour-time",
+            4_i64,
+            json!({
+                "state": "validated",
+                "reviewer_id": "reviewer-1",
+                "reviewed_at": "2026-01-01T24:00:00.000Z",
+                "evidence_ref": "synthetic-evidence"
+            }),
+        ),
+    ] {
+        let result = connection.execute(
+            "INSERT INTO visual_versions(id, visual_id, version_number, template_version_id, values_json,
+             special_validation_json, created_at, published_at) VALUES (?1, 'special-visual', ?2,
+             'special-template-version', '{}', ?3, '2026-09-25T08:00:00.000Z', '2026-09-25T08:00:00.000Z')",
+            params![id, version_number, evidence.to_string()],
+        );
+        assert!(result.is_err(), "database trigger accepted invalid evidence: {id}");
+    }
+
     version.special_validation = Some(json!({
         "state": "validated",
         "reviewer_id": "reviewer-1",
@@ -585,6 +626,29 @@ fn repository_contract_blocks_unvalidated_special_visual_publication() {
             )
         })
         .is_ok());
+}
+
+#[test]
+fn repository_contract_rejects_nested_visual_version_values() {
+    let (_directory, database) = open_database();
+    add_parent_records(&database);
+
+    for invalid_value in [json!([]), json!({ "nested": "value" })] {
+        let mut version = visual_version(
+            "visual-version-invalid-value",
+            "visual-1",
+            "template-version-1",
+        );
+        version.values["location"] = invalid_value;
+        let result = database.transaction(|transaction| {
+            VisualRepository.add_version(
+                transaction,
+                &version,
+                &audit("visual-audit-invalid-value", &version.id),
+            )
+        });
+        assert!(result.is_err(), "accepted nested visual value: {}", version.values);
+    }
 }
 
 #[test]

@@ -21,7 +21,9 @@ pub type StorageResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 const INITIAL_SCHEMA: &str = include_str!("migrations/0001_initial.sql");
 const SPECIAL_PUBLICATION_GATE: &str = include_str!("migrations/0002_special_publication_gate.sql");
-const MIGRATIONS: [Migration; 2] = [
+const STRICT_SPECIAL_VALIDATION: &str =
+    include_str!("migrations/0003_strict_special_validation.sql");
+const MIGRATIONS: [Migration; 3] = [
     Migration {
         version: 1,
         name: "0001_initial.sql",
@@ -31,6 +33,11 @@ const MIGRATIONS: [Migration; 2] = [
         version: 2,
         name: "0002_special_publication_gate.sql",
         sql: SPECIAL_PUBLICATION_GATE,
+    },
+    Migration {
+        version: 3,
+        name: "0003_strict_special_validation.sql",
+        sql: STRICT_SPECIAL_VALIDATION,
     },
 ];
 

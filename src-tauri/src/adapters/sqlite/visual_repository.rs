@@ -183,6 +183,14 @@ impl VisualRepository {
         validate_id(&version.template_version_id)?;
         if version.version_number <= 0
             || !version.values.is_object()
+            || !version.values.as_object().is_some_and(|values| {
+                values.values().all(|value| {
+                    value.is_null()
+                        || value.is_string()
+                        || value.is_boolean()
+                        || value.is_number()
+                })
+            })
             || version
                 .special_validation
                 .as_ref()
