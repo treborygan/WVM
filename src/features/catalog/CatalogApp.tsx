@@ -22,6 +22,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [selected, setSelected] = useState<VisualDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -30,9 +31,14 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   const [busy, setBusy] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const loadGeneration = useRef(0);
+  const detailGeneration = useRef(0);
 
   const load = useCallback(async (nextQuery: CatalogListQuery, nextSelected?: VisualDetail | null) => {
     const generation = ++loadGeneration.current;
+    if (nextSelected !== undefined) {
+      detailGeneration.current += 1;
+      setDetailLoading(false);
+    }
     setLoading(true);
     setError(null);
     try {
@@ -52,6 +58,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   }, [gateway]);
 
   useEffect(() => { void load(query); }, [load, query]);
+  useEffect(() => () => { detailGeneration.current += 1; }, []);
   useEffect(() => {
     if (dialogMode && dialogRef.current && !dialogRef.current.open) {
       if (dialogRef.current.showModal) dialogRef.current.showModal();
@@ -66,9 +73,21 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   const chosenTemplate = useMemo(() => templates.find((choice) => choice.template.id === selected?.visual.template_id), [selected?.visual.template_id, templates]);
 
   async function selectVisual(row: VisualRow) {
+    const generation = ++detailGeneration.current;
+    setSelected(null);
+    setDetailLoading(true);
     setActionError(null);
-    try { setSelected(await gateway.detail(row.id)); }
-    catch (reason) { setActionError(reason instanceof Error ? reason.message : "The visual details could not be loaded."); }
+    try {
+      const detail = await gateway.detail(row.id);
+      if (generation === detailGeneration.current) setSelected(detail);
+    } catch (reason) {
+      if (generation === detailGeneration.current) {
+        setSelected(null);
+        setActionError(reason instanceof Error ? reason.message : "The visual details could not be loaded.");
+      }
+    } finally {
+      if (generation === detailGeneration.current) setDetailLoading(false);
+    }
   }
 
   async function submitSearch(event: FormEvent<HTMLFormElement>) {
@@ -239,7 +258,10 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
             {selected.visual.lifecycle_state === "Retired" ? <button className="button button-secondary lifecycle-action" onClick={() => void transition("reactivate")} disabled={busy}>Reactivate as draft</button> : null}
             <section className="history-section"><h3>Version history</h3>{selected.history.length ? <ol className="history-list">{[...selected.history].reverse().map((version) => <li key={version.id}><div><strong>Version {version.version_number}</strong><span>{version.published_at ? "Published" : "Draft"}</span></div><time dateTime={version.created_at}>{formatDate(version.created_at)}</time>{version.published_at ? <span className="immutable-note">Immutable published version</span> : null}</li>)}</ol> : <p>No versions recorded.</p>}</section>
             {selected.visual.current_published_version_id ? <p className="published-note">Published version {selected.history.find((version) => version.id === selected.visual.current_published_version_id)?.version_number} remains immutable.</p> : null}
-          </aside> : <aside className="detail-pane detail-placeholder"><h2>Select a visual</h2><p>Choose a row to inspect its fields and version history.</p></aside>}
+          </aside> : <aside className="detail-pane detail-placeholder" aria-busy={detailLoading}>
+            <h2>Select a visual</h2>
+            {detailLoading ? <p role="status">Loading visual details</p> : <p>Choose a row to inspect its fields and version history.</p>}
+          </aside>}
         </div>
       </main>
 

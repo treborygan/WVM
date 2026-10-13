@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CatalogApp } from "../CatalogApp";
@@ -59,6 +59,79 @@ describe("CatalogApp", () => {
     expect(screen.queryByRole("row", { name: /Stale filter result/ })).not.toBeInTheDocument();
     expect(gateway.list).toHaveBeenNthCalledWith(1, expect.objectContaining({ location: "STALE" }));
     expect(gateway.list).toHaveBeenNthCalledWith(2, expect.objectContaining({ location: "CURRENT" }));
+  });
+
+  it("ignores a stale detail success after a newer visual is selected", async () => {
+    const first = (await gateway.list({ page: 1, page_size: 50 })).items[0] as VisualRow;
+    const firstDetail = await gateway.detail(first.id);
+    const secondDetail = {
+      ...firstDetail,
+      visual: { ...firstDetail.visual, id: "visual-2" as VisualRow["id"], name: "Second visual" },
+    };
+    const second: VisualRow = { ...secondDetail.visual, template_family: secondDetail.template_family };
+    vi.mocked(gateway.list).mockResolvedValueOnce({ items: [first, second], page: 1, page_size: 50, total: 2, total_pages: 1 });
+    let resolveFirst!: (detail: typeof secondDetail) => void;
+    let resolveSecond!: (detail: typeof secondDetail) => void;
+    const firstRequest = new Promise<typeof secondDetail>((resolve) => { resolveFirst = resolve; });
+    const secondRequest = new Promise<typeof secondDetail>((resolve) => { resolveSecond = resolve; });
+    vi.mocked(gateway.detail).mockReturnValueOnce(firstRequest).mockReturnValueOnce(secondRequest);
+    render(<CatalogApp gateway={gateway} />);
+    fireEvent.click(await screen.findByRole("row", { name: /Aisle marker A-01/ }));
+    fireEvent.click(screen.getByRole("row", { name: /Second visual/ }));
+
+    resolveSecond(secondDetail);
+    expect(await screen.findByRole("heading", { name: "Second visual" })).toBeVisible();
+    await act(async () => { resolveFirst(firstDetail); await firstRequest; });
+
+    expect(screen.getByRole("heading", { name: "Second visual" })).toBeVisible();
+  });
+
+  it("ignores a stale detail rejection after a newer visual is selected", async () => {
+    const first = (await gateway.list({ page: 1, page_size: 50 })).items[0] as VisualRow;
+    const firstDetail = await gateway.detail(first.id);
+    const secondDetail = { ...firstDetail, visual: { ...firstDetail.visual, id: "visual-2" as VisualRow["id"], name: "Second visual" } };
+    const second: VisualRow = { ...secondDetail.visual, template_family: secondDetail.template_family };
+    vi.mocked(gateway.list).mockResolvedValueOnce({ items: [first, second], page: 1, page_size: 50, total: 2, total_pages: 1 });
+    let rejectFirst!: (reason: Error) => void;
+    let resolveSecond!: (detail: typeof secondDetail) => void;
+    const firstRequest = new Promise<typeof secondDetail>((_resolve, reject) => { rejectFirst = reject; });
+    const secondRequest = new Promise<typeof secondDetail>((resolve) => { resolveSecond = resolve; });
+    vi.mocked(gateway.detail).mockReturnValueOnce(firstRequest).mockReturnValueOnce(secondRequest);
+    render(<CatalogApp gateway={gateway} />);
+    fireEvent.click(await screen.findByRole("row", { name: /Aisle marker A-01/ }));
+    fireEvent.click(screen.getByRole("row", { name: /Second visual/ }));
+    resolveSecond(secondDetail);
+    expect(await screen.findByRole("heading", { name: "Second visual" })).toBeVisible();
+
+    await act(async () => {
+      rejectFirst(new Error("Stale first detail failed"));
+      await firstRequest.catch(() => undefined);
+    });
+    expect(screen.queryByText("Stale first detail failed")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Second visual" })).toBeVisible();
+  });
+
+  it("clears the prior actionable selection while loading a new detail that fails", async () => {
+    const first = (await gateway.list({ page: 1, page_size: 50 })).items[0] as VisualRow;
+    const firstDetail = await gateway.detail(first.id);
+    const secondDetail = { ...firstDetail, visual: { ...firstDetail.visual, id: "visual-2" as VisualRow["id"], name: "Second visual" } };
+    const second: VisualRow = { ...secondDetail.visual, template_family: secondDetail.template_family };
+    vi.mocked(gateway.list).mockResolvedValueOnce({ items: [first, second], page: 1, page_size: 50, total: 2, total_pages: 1 });
+    let rejectSecond!: (reason: Error) => void;
+    const request = new Promise<typeof secondDetail>((_resolve, reject) => { rejectSecond = reject; });
+    vi.mocked(gateway.detail).mockResolvedValueOnce(firstDetail).mockReturnValueOnce(request);
+    render(<CatalogApp gateway={gateway} />);
+    fireEvent.click(await screen.findByRole("row", { name: /Aisle marker A-01/ }));
+    expect(await screen.findByRole("heading", { name: "Aisle marker A-01" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("row", { name: /Second visual/ }));
+    expect(screen.getByRole("heading", { name: "Select a visual" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Duplicate visual" })).not.toBeInTheDocument();
+    rejectSecond(new Error("Second detail unavailable"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Second detail unavailable");
+    expect(screen.getByRole("heading", { name: "Select a visual" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Duplicate visual" })).not.toBeInTheDocument();
   });
 
   it("reports a loading error and retries without hiding the failed request", async () => {

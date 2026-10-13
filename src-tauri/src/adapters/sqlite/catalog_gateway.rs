@@ -168,7 +168,11 @@ impl<'a> CatalogGateway<'a> {
                     VisualRepository.create(transaction, &visual)?;
                     let version = VisualVersionRecord {
                         id: visual_version_id.clone(), visual_id: visual_id.clone(), version_number: 1,
-                        template_version_id, values: json!({ "location": visual.location, "flow": visual.flow }),
+                        template_version_id,
+                        values: snapshot_values(
+                            &json!({ "location": visual.location, "flow": visual.flow }),
+                            &visual_fields_from_record(&visual),
+                        ).map_err(|message| invalid_data(&message))?,
                         notes: Some("Synthetic sample".to_owned()), special_validation: special_pending(family),
                         created_by: Some("synthetic-sample".to_owned()), created_at: now.clone(), published_at: None,
                     };
@@ -324,19 +328,26 @@ impl<'a> CatalogGateway<'a> {
                     created_at: now.clone(),
                     published_at: None,
                 };
-                VisualRepository.add_version(
-                    transaction,
-                    &version,
-                    &audit_event(
-                        &version.id,
-                        "visual_version",
-                        &version.id,
-                        Some(&version.id),
-                        "draft_saved",
-                        &now,
-                        request.actor.clone(),
+                let mut save_event = audit_event(
+                    &version.id,
+                    "visual_version",
+                    &version.id,
+                    Some(&version.id),
+                    "draft_saved",
+                    &now,
+                    request.actor.clone(),
+                );
+                save_event.details = json!({
+                    "source": "local_application",
+                    "action": "draft_saved",
+                    "prior_version_id": latest.id,
+                    "new_version_id": version.id,
+                    "changed_fields": changed_projection_fields(
+                        &visual_fields_from_record(&current),
+                        &request.visual,
                     ),
-                )?;
+                });
+                VisualRepository.add_version(transaction, &version, &save_event)?;
                 let mut projection = current.clone();
                 projection.name = request.visual.name.clone();
                 projection.visual_type = request.visual.visual_type.clone();
@@ -406,13 +417,19 @@ impl<'a> CatalogGateway<'a> {
                     updated_at: now.clone(),
                     ..source.clone()
                 };
+                let source_fields = visual_fields_from_record(&source);
+                validate_projection_matches(&source_version.values, &source_fields)
+                    .map_err(|message| invalid_data(&message))?;
+                let copied_values =
+                    snapshot_values(&source_version.values, &visual_fields_from_record(&copied))
+                        .map_err(|message| invalid_data(&message))?;
                 VisualRepository.create(transaction, &copied)?;
                 let version = VisualVersionRecord {
                     id: new_version_id.clone(),
                     visual_id: copied.id.clone(),
                     version_number: 1,
                     template_version_id: source_version.template_version_id.clone(),
-                    values: source_version.values.clone(),
+                    values: copied_values,
                     notes: source_version.notes.clone(),
                     special_validation: special_pending(&template.family)
                         .or_else(|| source_version.special_validation.clone()),
@@ -551,6 +568,12 @@ impl<'a> CatalogGateway<'a> {
                                 "Visual is in the wrong lifecycle state for this action.",
                             ));
                         }
+                        let projected_fields = visual_fields_from_record(&visual);
+                        validate_projection_matches(&current_version.values, &projected_fields)
+                            .map_err(|message| invalid_data(&message))?;
+                        let normalized_values =
+                            snapshot_values(&current_version.values, &projected_fields)
+                                .map_err(|message| invalid_data(&message))?;
                         let version_id = Uuid::new_v4().to_string();
                         let new_version = VisualVersionRecord {
                             id: version_id.clone(),
@@ -559,7 +582,7 @@ impl<'a> CatalogGateway<'a> {
                                 .last()
                                 .map_or(1, |version| version.version_number + 1),
                             template_version_id: current_version.template_version_id.clone(),
-                            values: current_version.values.clone(),
+                            values: normalized_values,
                             notes: current_version.notes.clone(),
                             special_validation: current_version.special_validation.clone(),
                             created_by: request.actor.clone(),
@@ -795,6 +818,7 @@ fn validate_scalar_object(value: &Value) -> AppResult<()> {
 fn validate_projection_matches(values: &Value, visual: &VisualFields) -> AppResult<()> {
     let fields = [
         ("name", Some(visual.name.as_str())),
+        ("visual_type", Some(visual.visual_type.as_str())),
         ("stock_class", visual.stock_class.as_deref()),
         ("location", visual.location.as_deref()),
         ("flow", visual.flow.as_deref()),
@@ -812,6 +836,33 @@ fn validate_projection_matches(values: &Value, visual: &VisualFields) -> AppResu
         }
     }
     Ok(())
+}
+
+fn visual_fields_from_record(visual: &VisualRecord) -> VisualFields {
+    VisualFields {
+        name: visual.name.clone(),
+        visual_type: visual.visual_type.clone(),
+        stock_class: visual.stock_class.clone(),
+        location: visual.location.clone(),
+        flow: visual.flow.clone(),
+        description: visual.description.clone(),
+        accent_color: visual.accent_color.clone(),
+    }
+}
+
+fn changed_projection_fields(previous: &VisualFields, next: &VisualFields) -> Vec<&'static str> {
+    [
+        ("name", previous.name != next.name),
+        ("visual_type", previous.visual_type != next.visual_type),
+        ("stock_class", previous.stock_class != next.stock_class),
+        ("location", previous.location != next.location),
+        ("flow", previous.flow != next.flow),
+        ("description", previous.description != next.description),
+        ("accent_color", previous.accent_color != next.accent_color),
+    ]
+    .into_iter()
+    .filter_map(|(name, changed)| changed.then_some(name))
+    .collect()
 }
 
 fn snapshot_values(values: &Value, visual: &VisualFields) -> AppResult<Value> {
@@ -992,6 +1043,104 @@ mod tests {
         (directory, database)
     }
 
+    fn assert_complete_snapshot(values: &Value, visual: &VisualData) {
+        for (key, value) in [
+            ("name", Some(visual.name.as_str())),
+            ("visual_type", Some(visual.visual_type.as_str())),
+            ("stock_class", visual.stock_class.as_deref()),
+            ("location", visual.location.as_deref()),
+            ("flow", visual.flow.as_deref()),
+            ("description", visual.description.as_deref()),
+            ("accent_color", visual.accent_color.as_deref()),
+        ] {
+            assert_eq!(
+                values.get(key),
+                Some(&value.map_or(Value::Null, |value| Value::String(value.to_owned()))),
+                "snapshot {key}"
+            );
+        }
+    }
+
+    fn seed_visual_with_version(
+        database: &SqliteDatabase,
+        values: Value,
+        published: bool,
+    ) -> VisualRecord {
+        let now = "2026-10-13T00:00:00.000Z".to_owned();
+        let visual = VisualRecord {
+            id: "legacy-visual".to_owned(),
+            name: "Legacy visual".to_owned(),
+            visual_type: "gang".to_owned(),
+            template_id: "template-gang-standard-2up".to_owned(),
+            stock_class: Some("synthetic-stock".to_owned()),
+            location: Some("A-01".to_owned()),
+            flow: Some("SYN-FLOW-01".to_owned()),
+            description: Some("Synthetic fixture".to_owned()),
+            accent_color: Some("#123456".to_owned()),
+            lifecycle_state: "Draft".to_owned(),
+            current_draft_version_id: None,
+            current_published_version_id: None,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        let version = VisualVersionRecord {
+            id: "legacy-version-1".to_owned(),
+            visual_id: visual.id.clone(),
+            version_number: 1,
+            template_version_id: "template-version-gang-standard-2up".to_owned(),
+            values,
+            notes: None,
+            special_validation: None,
+            created_by: Some("synthetic-test".to_owned()),
+            created_at: now.clone(),
+            published_at: published.then_some(now.clone()),
+        };
+        database
+            .transaction(|transaction| {
+                VisualRepository.create(transaction, &visual)?;
+                VisualRepository.add_version(
+                    transaction,
+                    &version,
+                    &audit_event(
+                        "legacy-version-audit",
+                        "visual_version",
+                        &version.id,
+                        Some(&version.id),
+                        "legacy_seed",
+                        &now,
+                        None,
+                    ),
+                )?;
+                let event = audit_event(
+                    "legacy-pointer-audit",
+                    "visual",
+                    &visual.id,
+                    Some(&version.id),
+                    "legacy_seed_selected",
+                    &now,
+                    None,
+                );
+                if published {
+                    VisualRepository.set_current_published_version(
+                        transaction,
+                        &visual.id,
+                        &version.id,
+                        &event,
+                    )?;
+                } else {
+                    VisualRepository.set_current_draft_version(
+                        transaction,
+                        &visual.id,
+                        &version.id,
+                        &event,
+                    )?;
+                }
+                Ok(())
+            })
+            .expect("legacy fixture commits");
+        visual
+    }
+
     #[test]
     fn synthetic_sample_catalog_requires_explicit_empty_catalog_and_creates_five_families_atomically(
     ) {
@@ -1004,13 +1153,23 @@ mod tests {
             .templates(&TemplateListQuery::default())
             .expect("template choices load");
         assert_eq!(choices.len(), 5);
-        assert_eq!(
-            gateway
-                .list(&CatalogListQuery::default())
-                .expect("sample visuals load")
-                .total,
-            5
-        );
+        let page = gateway
+            .list(&CatalogListQuery::default())
+            .expect("sample visuals load");
+        assert_eq!(page.total, 5);
+        for summary in page.items {
+            let detail = gateway
+                .detail(&summary.visual.id)
+                .expect("sample detail loads");
+            assert_complete_snapshot(
+                &detail
+                    .current_version
+                    .as_ref()
+                    .expect("sample version")
+                    .values,
+                &detail.visual,
+            );
+        }
         assert!(choices.iter().all(|choice| choice
             .template
             .provenance
@@ -1078,19 +1237,37 @@ mod tests {
             saved.current_version.as_ref().expect("new revision").id,
             initial_revision
         );
+        let connection = database.connect().expect("audit connection opens");
+        let audit_details: String = connection.query_row(
+            "SELECT details_json FROM audit_events WHERE action = 'draft_saved' AND entity_id = ?1",
+            [&saved.current_version.as_ref().unwrap().id],
+            |row| row.get(0),
+        ).expect("draft save audit exists");
+        let audit_details: Value = serde_json::from_str(&audit_details).expect("audit JSON parses");
+        assert_eq!(audit_details["prior_version_id"], json!(initial_revision));
+        assert_eq!(
+            audit_details["new_version_id"],
+            json!(saved.current_version.as_ref().unwrap().id)
+        );
+        assert_eq!(audit_details["changed_fields"], json!(["location"]));
 
         let duplicated = gateway
             .duplicate(&created.visual.id, Some("synthetic-test".to_owned()))
             .expect("visual duplicates");
         assert_ne!(duplicated.visual.id, created.visual.id);
         assert_eq!(duplicated.visual.lifecycle_state, "Draft");
+        let duplicate_version = duplicated
+            .current_version
+            .as_ref()
+            .expect("copied revision");
+        assert_complete_snapshot(&duplicate_version.values, &duplicated.visual);
         assert_eq!(
-            duplicated
-                .current_version
-                .as_ref()
-                .expect("copied revision")
-                .values,
-            saved.current_version.unwrap().values
+            duplicate_version.values["name"],
+            json!(duplicated.visual.name)
+        );
+        assert_eq!(
+            duplicate_version.values["location"],
+            saved.current_version.unwrap().values["location"]
         );
     }
 
@@ -1216,6 +1393,138 @@ mod tests {
             )
             .unwrap();
         assert_eq!(audit_count, 1);
+    }
+
+    #[test]
+    fn publish_normalizes_missing_legacy_snapshot_fields_without_rewriting_history() {
+        let (_directory, database) = gateway();
+        seed_template(&database, "gang-standard-2up", "gang", true);
+        let old_values = json!({ "location": "A-01" });
+        let visual = seed_visual_with_version(&database, old_values.clone(), false);
+        let gateway = CatalogGateway::new(&database);
+        let review = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Draft".to_owned(),
+                expected_revision_id: "legacy-version-1".to_owned(),
+                action: LifecycleAction::SubmitForReview,
+                actor: None,
+            })
+            .expect("legacy version enters review");
+        let published = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Review".to_owned(),
+                expected_revision_id: review.current_version.as_ref().unwrap().id.clone(),
+                action: LifecycleAction::Publish,
+                actor: None,
+            })
+            .expect("missing canonical fields are filled for the new published version");
+
+        assert_eq!(published.history[0].values, old_values);
+        assert_complete_snapshot(
+            &published.current_version.as_ref().unwrap().values,
+            &published.visual,
+        );
+        assert_eq!(published.history.len(), 2);
+    }
+
+    #[test]
+    fn contradictory_legacy_snapshot_cannot_be_published_or_repaired_silently() {
+        let (_directory, database) = gateway();
+        seed_template(&database, "gang-standard-2up", "gang", true);
+        let old_values = json!({ "location": "CONTRADICTORY-99" });
+        let visual = seed_visual_with_version(&database, old_values.clone(), false);
+        let gateway = CatalogGateway::new(&database);
+        let review = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Draft".to_owned(),
+                expected_revision_id: "legacy-version-1".to_owned(),
+                action: LifecycleAction::SubmitForReview,
+                actor: None,
+            })
+            .expect("legacy version enters review");
+        let result = gateway.transition(TransitionRequest {
+            visual_id: visual.id.clone(),
+            expected_state: "Review".to_owned(),
+            expected_revision_id: review.current_version.as_ref().unwrap().id.clone(),
+            action: LifecycleAction::Publish,
+            actor: None,
+        });
+
+        assert!(result.unwrap_err().contains("location"));
+        let unchanged = gateway
+            .detail(&visual.id)
+            .expect("visual remains reviewable");
+        assert_eq!(unchanged.visual.lifecycle_state, "Review");
+        assert_eq!(unchanged.history.len(), 1);
+        assert_eq!(unchanged.history[0].values, old_values);
+    }
+
+    #[test]
+    fn reactivate_normalizes_a_new_version_and_preserves_the_retired_snapshot() {
+        let (_directory, database) = gateway();
+        seed_template(&database, "gang-standard-2up", "gang", true);
+        let old_values = json!({ "location": "A-01" });
+        let visual = seed_visual_with_version(&database, old_values.clone(), true);
+        let gateway = CatalogGateway::new(&database);
+        let retired = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Published".to_owned(),
+                expected_revision_id: "legacy-version-1".to_owned(),
+                action: LifecycleAction::Retire,
+                actor: None,
+            })
+            .expect("visual retires");
+        let active = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Retired".to_owned(),
+                expected_revision_id: retired.current_version.as_ref().unwrap().id.clone(),
+                action: LifecycleAction::Reactivate,
+                actor: None,
+            })
+            .expect("reactivation adds a normalized draft snapshot");
+
+        assert_eq!(active.history[0].values, old_values);
+        assert_complete_snapshot(
+            &active.current_version.as_ref().unwrap().values,
+            &active.visual,
+        );
+        assert_eq!(active.visual.lifecycle_state, "Draft");
+    }
+
+    #[test]
+    fn contradictory_legacy_snapshot_cannot_be_reactivated() {
+        let (_directory, database) = gateway();
+        seed_template(&database, "gang-standard-2up", "gang", true);
+        let old_values = json!({ "location": "CONTRADICTORY-99" });
+        let visual = seed_visual_with_version(&database, old_values.clone(), true);
+        let gateway = CatalogGateway::new(&database);
+        let retired = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Published".to_owned(),
+                expected_revision_id: "legacy-version-1".to_owned(),
+                action: LifecycleAction::Retire,
+                actor: None,
+            })
+            .expect("legacy visual retires");
+        let result = gateway.transition(TransitionRequest {
+            visual_id: visual.id.clone(),
+            expected_state: "Retired".to_owned(),
+            expected_revision_id: retired.current_version.as_ref().unwrap().id.clone(),
+            action: LifecycleAction::Reactivate,
+            actor: None,
+        });
+
+        assert!(result.unwrap_err().contains("location"));
+        let unchanged = gateway.detail(&visual.id).expect("visual remains retired");
+        assert_eq!(unchanged.visual.lifecycle_state, "Retired");
+        assert_eq!(unchanged.history.len(), 1);
+        assert_eq!(unchanged.history[0].values, old_values);
     }
 
     #[test]
