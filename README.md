@@ -12,7 +12,7 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 
 ## Current usable release
 
-The Windows desktop catalog release provides a local SQLite-backed catalog with search, filters, sorting, paging, record creation/editing/duplication, immutable version history, lifecycle transitions, and a publication gate for special Gang records. It includes clearly marked synthetic examples for the five template families. Data is stored under Windows local application data, and the branded local MSI build uses the supplied DHL logo and Desktop Delivery fonts after manifest hash checks.
+The Windows desktop catalog release provides a local SQLite-backed catalog with search, filters, sorting, paging, record creation/editing/duplication, immutable version history, lifecycle transitions, and a publication gate for special Gang records. It includes synthetic examples for five template families and a preview-only rendering of the exact immutable template version linked to each visual version. The preview supports text, basic shapes, and lines; it is not print-ready and reports unsupported layout features. Data is stored under Windows local application data, and the branded local MSI build uses the supplied DHL logo and Desktop Delivery fonts after manifest hash checks.
 
 The millimetre canvas editor, deterministic SVG/PDF generation, print handoff, private legacy import UI, and verified backup/restore are still planned. This release is a usable catalog foundation, not a completed V1 production sign-authoring workflow. No real warehouse data is included; the local QA catalog contains synthetic examples only.
 

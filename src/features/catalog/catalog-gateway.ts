@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { TemplateFamily, Visual, VisualVersion } from "../../domain/entities";
+import type { TemplateFamily, TemplateVersion, Visual, VisualVersion } from "../../domain/entities";
 
 export type LifecycleAction = "submit_for_review" | "return_to_draft" | "publish" | "retire" | "reactivate";
 
@@ -21,6 +21,7 @@ export interface VisualDetail {
   readonly visual: Visual;
   readonly template_family: TemplateFamily;
   readonly current_version?: VisualVersion;
+  readonly current_template_version?: TemplateVersion;
   readonly history: readonly VisualVersion[];
   readonly source_references: readonly { readonly source_id: string; readonly source_name: string; readonly sheet_or_slide?: string }[];
 }

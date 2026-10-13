@@ -1,6 +1,6 @@
 # WVM V1 Release Implementation Plan
 
-> Execution update (2026-10-14): the user directed that remaining implementation proceed solo without agents. Do not use SOFA. A usable catalog milestone is being packaged first; the editor, rendering, PDF/print, import, and backup stages remain follow-on work.
+> Execution update (2026-10-14): the user directed that implementation proceed solo without agents. Do not use SOFA. The packaged catalog now includes a non-print-ready preview bound to each record's exact immutable template version; the full editor, rendering, PDF/print, import, and backup stages remain.
 
 **Goal:** Complete the Windows-first Warehouse Visual Manager specified in `docs/V1_SPEC.md`, retaining local SQLite, versioned records, a millimetre editor, deterministic vector export, controlled printing, and safe backup/restore.
 
@@ -45,9 +45,10 @@ flowchart LR
 ## Updated milestone status (2026-10-14)
 
 - Stage 1: catalog migration and repository safety contracts are implemented locally on `codex/wvm-v1-release`; npm's reported high advisory was fixed by upgrading the locked `source-map-js` transitive dependency to 1.2.2.
-- Stage 2: persistent Windows local-app-data SQLite catalog, five synthetic template families, create/edit/duplicate, immutable version history, filtering/search/sorting/paging, lifecycle operations, and special Gang publication gate are implemented. A follow-up rejects non-string legacy canonical values before publish/reactivate, preserving the original version and transaction state.
-- Stable usable milestone: the Tauri shell now has a restrictive CSP and MSI/NSIS bundling enabled. The local branded MSI build verifies the supplied DHL logo, delivery illustration, and Desktop Delivery regular/bold fonts against the prepared manifest. The unsigned MSI was built and the packaged executable was opened successfully; full-width UI shows the DHL logo and synthetic catalog.
-- Still required for V1: full millimetre editor and undo/redo, shared deterministic SVG scene, native vector PDF and print handoff, local asset/brand management, private 145-record reconciliation, verified backup/restore, and six physical special-sign checks. Actual printer/media calibration is also pending.
+- Stage 2: persistent Windows local-app-data SQLite catalog, five synthetic template families, create/edit/duplicate, immutable version history, filtering/search/sorting/paging, lifecycle operations, and special Gang publication gate are implemented. A follow-up rejects non-string legacy canonical values before publish/reactivate, preserving the original version and transaction state. Catalog detail returns the exact immutable template document linked to each current visual version.
+- Stable usable milestone: the Tauri shell has a restrictive CSP and MSI/NSIS bundling. The local branded MSI verifies the supplied DHL logo, delivery illustration, and Desktop Delivery regular/bold fonts against the prepared manifest. The unsigned MSI was rebuilt and the packaged executable opened on Windows; full-width UI shows the DHL logo and persisted synthetic catalog.
+- A catalog preview now renders escaped deterministic SVG for text, simple shapes, and lines. It is explicitly labeled preview-only and reports unavailable images and simplified wrapping/font-fit behavior. Newly initialized synthetic templates have visible example layouts; prior template versions remain unchanged and immutable.
+- Still required for V1: full millimetre editor and undo/redo, shared production render scene and sheet composition, native vector PDF and print handoff, local asset/brand management, private 145-record reconciliation, verified backup/restore, six physical special-sign checks, and printer/media calibration.
 - No branch merge, public GitHub release, or company asset publication has occurred.
 
 ## Review focus

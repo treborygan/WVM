@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import type { TemplateFamily } from "../../domain/entities";
 import { desktopCatalogGateway, type CatalogGateway, type CatalogListQuery, type TemplateChoice, type VisualDetail, type VisualRow } from "./catalog-gateway";
+import { renderTemplatePreview } from "./template-preview";
 import "./catalog.css";
 
 const familyLabels: Record<TemplateFamily, string> = {
@@ -71,6 +72,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   }, [dialogMode]);
 
   const chosenTemplate = useMemo(() => templates.find((choice) => choice.template.id === selected?.visual.template_id), [selected?.visual.template_id, templates]);
+  const selectedPreview = useMemo(() => selected ? renderTemplatePreview(selected) : null, [selected]);
 
   async function selectVisual(row: VisualRow) {
     const generation = ++detailGeneration.current;
@@ -251,6 +253,12 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
             <div className="detail-actions"><button className="button button-primary" onClick={() => void duplicateVisual()} disabled={busy}>Duplicate visual</button>
               {selected.visual.lifecycle_state === "Draft" || selected.visual.lifecycle_state === "Published" ? <button className="button button-secondary" onClick={() => setDialogMode("edit")} disabled={!chosenTemplate || busy}>Edit visual</button> : null}</div>
             <dl className="detail-fields"><Field label="Type" value={selected.visual.visual_type} /><Field label="Stock class" value={selected.visual.stock_class} /><Field label="Location" value={selected.visual.location} /><Field label="Flow" value={selected.visual.flow} /><Field label="Description" value={selected.visual.description} /><Field label="Accent color" value={selected.visual.accent_color} /></dl>
+            <section className="template-preview-section" aria-label="Template preview">
+              <div className="template-preview-heading"><h3>Template preview</h3><span>Preview only</span></div>
+              <p className="preview-disclaimer">Version {selected.current_template_version?.version_number ?? "—"} · visual layout preview; not print-ready.</p>
+              {selectedPreview?.svg ? <img className="template-preview-image" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(selectedPreview.svg)}`} alt={`${selected.visual.name} template preview`} /> : <p className="preview-empty">{selected.current_template_version ? "This template has no visible elements yet." : "The linked template version is unavailable."}</p>}
+              {selectedPreview?.diagnostics.length ? <ul className="preview-diagnostics">{selectedPreview.diagnostics.map((diagnostic, index) => <li key={`${index}-${diagnostic}`}>{diagnostic}</li>)}</ul> : null}
+            </section>
             {selected.template_family === "gang-special-2up" ? <p className="validation-note">Special Gang validation: {selected.current_version?.special_validation?.state ?? "pending"}. Reviewer evidence is required before publication.</p> : null}
             {selected.visual.lifecycle_state === "Draft" ? <button className="button button-secondary lifecycle-action" onClick={() => void transition("submit_for_review")} disabled={busy || !selected.current_version}>Submit for review</button> : null}
             {selected.visual.lifecycle_state === "Review" ? <div className="detail-actions lifecycle-actions"><button className="button button-secondary" onClick={() => void transition("return_to_draft")} disabled={busy}>Return to draft</button><button className="button button-primary" onClick={() => void transition("publish")} disabled={busy}>Publish</button></div> : null}

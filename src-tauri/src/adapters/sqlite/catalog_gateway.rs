@@ -10,8 +10,8 @@ use crate::adapters::sqlite::{
 use crate::application::catalog::{
     lifecycle_transition_allowed, CatalogListQuery, CatalogPage, CatalogPort, CatalogVisualSummary,
     CreateVisualRequest, LegacySourceReferenceData, LifecycleAction, SaveDraftRequest,
-    TemplateChoice, TemplateData, TemplateListQuery, TransitionRequest, VisualData, VisualDetail,
-    VisualFields, VisualVersionData,
+    TemplateChoice, TemplateData, TemplateListQuery, TemplateVersionData, TransitionRequest,
+    VisualData, VisualDetail, VisualFields, VisualVersionData,
 };
 
 type AppResult<T> = Result<T, String>;
@@ -144,7 +144,30 @@ impl<'a> CatalogGateway<'a> {
                         "print_rules": { "copies_per_page": rows * columns,
                             "margins_mm": { "top": 5, "right": 5, "bottom": 5, "left": 5 },
                             "gap_mm": 2, "slots": { "rows": rows, "columns": columns } },
-                        "repetition": { "kind": "none" }, "defaults": {}, "elements": []
+                        "repetition": { "kind": "none" }, "defaults": { "font_family": "Delivery" },
+                        "elements": [
+                            { "id": "sample-top-rule", "type": "line", "x_mm": 10, "y_mm": 28, "width_mm": 190, "height_mm": 0.001,
+                              "rotation_degrees": 0, "z_index": 1, "visible": true, "locked": true,
+                              "style": { "stroke": { "kind": "literal", "value": "#D40511" }, "stroke_width_mm": 1.5 } },
+                            { "id": "sample-title", "type": "text", "x_mm": 10, "y_mm": 40, "width_mm": 190, "height_mm": 42,
+                              "rotation_degrees": 0, "z_index": 2, "visible": true, "locked": true,
+                              "content": { "kind": "binding", "path": "visual.location" },
+                              "style": { "font_family": "Delivery", "font_size_pt": 32, "font_weight": 700, "font_style": "normal",
+                                "horizontal_align": "left", "vertical_align": "middle", "line_height": 1.0, "wrapping": "nowrap", "overflow": "clip", "fit_policy": "none",
+                                "color": { "kind": "literal", "value": "#D40511" } } },
+                            { "id": "sample-name", "type": "text", "x_mm": 10, "y_mm": 92, "width_mm": 190, "height_mm": 24,
+                              "rotation_degrees": 0, "z_index": 3, "visible": true, "locked": true,
+                              "content": { "kind": "binding", "path": "visual.name" },
+                              "style": { "font_family": "Delivery", "font_size_pt": 17, "font_weight": 700, "font_style": "normal",
+                                "horizontal_align": "left", "vertical_align": "middle", "line_height": 1.0, "wrapping": "nowrap", "overflow": "clip", "fit_policy": "none",
+                                "color": { "kind": "literal", "value": "#282828" } } },
+                            { "id": "sample-flow", "type": "text", "x_mm": 10, "y_mm": 125, "width_mm": 190, "height_mm": 18,
+                              "rotation_degrees": 0, "z_index": 4, "visible": true, "locked": true,
+                              "content": { "kind": "binding", "path": "visual.flow" },
+                              "style": { "font_family": "Delivery", "font_size_pt": 12, "font_weight": 400, "font_style": "normal",
+                                "horizontal_align": "left", "vertical_align": "middle", "line_height": 1.0, "wrapping": "nowrap", "overflow": "clip", "fit_policy": "none",
+                                "color": { "kind": "literal", "value": "#282828" } } }
+                        ]
                     });
                     let template_version = TemplateVersionRecord {
                         id: template_version_id.clone(), template_id: template_id.clone(), version_number: 1,
@@ -697,6 +720,19 @@ fn detail_from(connection: &Connection, visual_id: &str) -> AppResult<VisualDeta
         .iter()
         .find(|version| Some(version.id.as_str()) == current_id)
         .cloned();
+    let current_template_version = if let Some(version) = &current_version {
+        TemplateRepository
+            .list_versions(connection, &template.id)
+            .map_err(as_message)?
+            .into_iter()
+            .find(|template_version| template_version.id == version.template_version_id)
+            .map(template_version_to_data)
+    } else {
+        None
+    };
+    if current_version.is_some() && current_template_version.is_none() {
+        return Err("The visual's immutable template version is unavailable.".to_owned());
+    }
     let source_references = VisualRepository
         .list_source_references(connection, visual_id)
         .map_err(as_message)?;
@@ -704,12 +740,23 @@ fn detail_from(connection: &Connection, visual_id: &str) -> AppResult<VisualDeta
         visual: visual_to_data(visual),
         template_family: template.family,
         current_version: current_version.map(version_to_data),
+        current_template_version,
         history: history.into_iter().map(version_to_data).collect(),
         source_references: source_references
             .into_iter()
             .map(source_reference_to_data)
             .collect(),
     })
+}
+
+fn template_version_to_data(row: TemplateVersionRecord) -> TemplateVersionData {
+    TemplateVersionData {
+        id: row.id,
+        template_id: row.template_id,
+        version_number: row.version_number,
+        document: row.document,
+        published_at: row.published_at,
+    }
 }
 
 fn visual_to_data(row: VisualRecord) -> VisualData {
@@ -1167,6 +1214,21 @@ mod tests {
             let detail = gateway
                 .detail(&summary.visual.id)
                 .expect("sample detail loads");
+            let template_version = detail
+                .current_template_version
+                .as_ref()
+                .expect("sample detail carries the immutable template document");
+            assert_eq!(
+                template_version.id,
+                detail.current_version.as_ref().unwrap().template_version_id
+            );
+            assert_eq!(
+                template_version.document["elements"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                4
+            );
             assert_complete_snapshot(
                 &detail
                     .current_version
@@ -1203,6 +1265,12 @@ mod tests {
         let created = gateway
             .create(request("gang-standard-2up", "gang"))
             .expect("visual creates");
+        let linked_template = created
+            .current_template_version
+            .as_ref()
+            .expect("detail includes its linked immutable template version");
+        assert_eq!(linked_template.id, "template-version-gang-standard-2up");
+        assert_eq!(linked_template.document["page"]["width_mm"], json!(210));
         let initial_revision = created
             .current_version
             .as_ref()

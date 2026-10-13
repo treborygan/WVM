@@ -175,8 +175,18 @@ pub struct VisualDetail {
     pub visual: VisualData,
     pub template_family: String,
     pub current_version: Option<VisualVersionData>,
+    pub current_template_version: Option<TemplateVersionData>,
     pub history: Vec<VisualVersionData>,
     pub source_references: Vec<LegacySourceReferenceData>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct TemplateVersionData {
+    pub id: String,
+    pub template_id: String,
+    pub version_number: i64,
+    pub document: serde_json::Value,
+    pub published_at: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -245,6 +255,7 @@ mod tests {
             },
             template_family: "gang-standard-2up".into(),
             current_version: None,
+            current_template_version: None,
             history: vec![],
             source_references: vec![],
         };
@@ -252,6 +263,7 @@ mod tests {
         assert!(wire.get("visual").is_some());
         assert!(wire.get("template_family").is_some());
         assert!(wire.get("current_version").is_some());
+        assert!(wire.get("current_template_version").is_some());
         assert!(wire.get("history").is_some());
         assert!(wire.get("source_references").is_some());
         assert_eq!(wire["visual"]["current_draft_version_id"], Value::Null);

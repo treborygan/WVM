@@ -23,6 +23,9 @@ describe("CatalogApp", () => {
     expect(await screen.findByRole("heading", { name: "Aisle marker A-01" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Version history" })).toBeVisible();
     expect(screen.getByText("Version 2")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Template preview" })).toBeVisible();
+    expect(screen.getByText("Preview only")).toBeVisible();
+    expect(screen.getByRole("img", { name: "Aisle marker A-01 template preview" })).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search visuals" }), { target: { value: "B-02" } });
     fireEvent.submit(screen.getByRole("searchbox", { name: "Search visuals" }).closest("form")!);
