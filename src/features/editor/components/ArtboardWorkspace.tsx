@@ -119,7 +119,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
         <LayersPanel elements={editedDocument.elements} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId}
           onToggleVisibility={changeVisibility} onToggleLock={changeLock} onReorder={reorder} onAddElement={addElement} onDeleteElement={deleteElement} />
       </div>
-      <Inspector element={selectedElement} page={editedDocument.page}
+      <Inspector element={selectedElement} page={editedDocument.page} values={values}
         onApplyGeometry={(element_id, geometry) => run({ type: "set_element_geometry", element_id, geometry })}
         onApplyPage={(geometry) => run({ type: "set_page_geometry", ...geometry })}
         onApplyTextAuthoring={(element_id, authoring) => run({ type: "set_text_authoring", element_id, ...authoring })}

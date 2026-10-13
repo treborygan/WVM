@@ -1,4 +1,4 @@
-import type { Element, ElementGeometry, PageGeometry, TemplateDocument, TextStyle } from "./template-document";
+import type { ColorBinding, Element, ElementGeometry, PageGeometry, TemplateDocument, TextBinding, TextStyle } from "./template-document";
 
 export type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 export type ElementOrder = "front" | "back" | "forward" | "backward";
@@ -11,7 +11,7 @@ export type EditorCommand =
   | { readonly type: "reorder_element"; readonly element_id: string; readonly position: ElementOrder }
   | { readonly type: "set_element_visible"; readonly element_id: string; readonly visible: boolean }
   | { readonly type: "set_element_locked"; readonly element_id: string; readonly locked: boolean }
-  | { readonly type: "set_text_authoring"; readonly element_id: string; readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly font_style?: TextStyle["font_style"]; readonly horizontal_align?: TextStyle["horizontal_align"]; readonly vertical_align?: TextStyle["vertical_align"]; readonly color?: string }
+  | { readonly type: "set_text_authoring"; readonly element_id: string; readonly content?: TextBinding; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly font_style?: TextStyle["font_style"]; readonly horizontal_align?: TextStyle["horizontal_align"]; readonly vertical_align?: TextStyle["vertical_align"]; readonly color?: ColorBinding }
   | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: string }
   | { readonly type: "add_element"; readonly element: Element }
   | { readonly type: "remove_element"; readonly element_id: string };
@@ -115,20 +115,21 @@ export function applyEditorCommand(document: TemplateDocument, command: EditorCo
       if (command.font_style !== undefined && command.font_style !== "normal" && command.font_style !== "italic") throw new RangeError("Text font style must be normal or italic.");
       if (command.horizontal_align !== undefined && !["left", "center", "right"].includes(command.horizontal_align)) throw new RangeError("Text alignment must be left, center, or right.");
       if (command.vertical_align !== undefined && !["top", "middle", "bottom"].includes(command.vertical_align)) throw new RangeError("Text vertical alignment must be top, middle, or bottom.");
-      if (command.value !== undefined && typeof command.value !== "string") throw new TypeError("Text content must be a string.");
+      if (command.content !== undefined && command.content.kind === "literal" && typeof command.content.value !== "string") throw new TypeError("Text content must be a string.");
+      if (command.content?.kind === "binding" && !["visual.name", "visual.location", "visual.flow", "visual.description", "visual.stock_class"].includes(command.content.path)) throw new RangeError("Text binding path is not supported.");
       if (typeof command.font_weight === "string" && command.font_weight !== "normal" && command.font_weight !== "bold") throw new RangeError("Text font weight must be normal, bold, or a numeric weight.");
       if (typeof command.font_weight === "number" && (command.font_weight < 100 || command.font_weight > 900 || command.font_weight % 100 !== 0)) throw new RangeError("Text weight must be between 100 and 900 in 100-point steps.");
-      if (command.color !== undefined && !validHexColor(command.color)) throw new RangeError("Text color must use a hexadecimal color value.");
+      if (command.color?.kind === "literal" && !validHexColor(command.color.value)) throw new RangeError("Text color must use a hexadecimal color value.");
+      if (command.color?.kind === "binding" && !["visual.accent_color", "brand.primary_color"].includes(command.color.path)) throw new RangeError("Text color binding path is not supported.");
       return updateElement(document, command.element_id, (element) => {
         if (element.type !== "text") throw new Error(`Element ${element.id} is not text.`);
-        if (command.value !== undefined && element.content.kind !== "literal") throw new Error(`Element ${element.id} does not have literal text content.`);
         return { ...element,
-          ...(command.value !== undefined ? { content: { kind: "literal" as const, value: command.value } } : {}),
+          ...(command.content !== undefined ? { content: command.content } : {}),
           style: { ...element.style, font_size_pt: command.font_size_pt, font_weight: command.font_weight,
             ...(command.font_style !== undefined ? { font_style: command.font_style } : {}),
             ...(command.horizontal_align !== undefined ? { horizontal_align: command.horizontal_align } : {}),
             ...(command.vertical_align !== undefined ? { vertical_align: command.vertical_align } : {}),
-            ...(command.color !== undefined ? { color: { kind: "literal" as const, value: command.color } } : {}) },
+            ...(command.color !== undefined ? { color: command.color } : {}) },
         };
       });
     case "set_shape_fill":

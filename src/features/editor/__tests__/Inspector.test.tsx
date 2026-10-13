@@ -68,7 +68,7 @@ describe("Inspector", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Font style" }), { target: { value: "italic" } });
     fireEvent.change(screen.getByLabelText("Text color"), { target: { value: "#d40511" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
-    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { value: "B-04", font_size_pt: 24, font_weight: "bold", font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: "#d40511" });
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { content: { kind: "literal", value: "B-04" }, font_size_pt: 24, font_weight: "bold", font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: { kind: "literal", value: "#d40511" } });
   });
 
   it("applies shape fill while preserving other styling in the command", () => {
@@ -87,7 +87,7 @@ describe("Inspector", () => {
     expect(screen.getByLabelText("Text color")).toBeDisabled();
     fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "28" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
-    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { font_size_pt: 28, font_weight: 400, font_style: "normal", horizontal_align: "left", vertical_align: "middle" });
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { content: { kind: "binding", path: "visual.location" }, font_size_pt: 28, font_weight: 400, font_style: "normal", horizontal_align: "left", vertical_align: "middle", color: { kind: "binding", path: "visual.accent_color" } });
   });
 
   it("keeps current alignment and font style when changing only the size", () => {
@@ -96,6 +96,17 @@ describe("Inspector", () => {
     render(<Inspector element={centered} page={page} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyTextAuthoring={onApplyTextAuthoring} />);
     fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "20" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
-    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { value: "A-01", font_size_pt: 20, font_weight: 400, font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: "#111111" });
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { content: { kind: "literal", value: "A-01" }, font_size_pt: 20, font_weight: 400, font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: { kind: "literal", value: "#111111" } });
+  });
+
+  it("assigns and edits visual text and color bindings", () => {
+    const onApplyTextAuthoring = vi.fn();
+    render(<Inspector element={textElement} page={page} values={{ "visual.name": "Visual label", "visual.accent_color": "#d40511" }} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyTextAuthoring={onApplyTextAuthoring} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Text source" }), { target: { value: "visual.name" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Text color source" }), { target: { value: "visual.accent_color" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", expect.objectContaining({ content: { kind: "binding", path: "visual.name" }, color: { kind: "binding", path: "visual.accent_color" } }));
+    expect(screen.getByRole("textbox", { name: "Text content" })).toBeDisabled();
+    expect(screen.getByLabelText("Text color")).toBeDisabled();
   });
 });

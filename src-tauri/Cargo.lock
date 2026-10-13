@@ -3837,7 +3837,7 @@ dependencies = [
 
 [[package]]
 name = "warehouse-visual-manager"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "rusqlite",
  "serde",
