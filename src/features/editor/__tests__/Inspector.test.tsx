@@ -71,12 +71,21 @@ describe("Inspector", () => {
     expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { content: { kind: "literal", value: "B-04" }, font_size_pt: 24, font_weight: "bold", font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: { kind: "literal", value: "#d40511" } });
   });
 
-  it("applies shape fill while preserving other styling in the command", () => {
+  it("applies a fixed shape fill while preserving other styling in the command", () => {
     const onApplyShapeFill = vi.fn();
     render(<Inspector element={element} page={page} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyShapeFill={onApplyShapeFill} />);
     fireEvent.change(screen.getByLabelText("Shape fill"), { target: { value: "#ffcc00" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply shape fill" }));
-    expect(onApplyShapeFill).toHaveBeenCalledWith("label", "#ffcc00");
+    expect(onApplyShapeFill).toHaveBeenCalledWith("label", { kind: "literal", value: "#ffcc00" });
+  });
+
+  it("binds a shape fill to the visual accent token", () => {
+    const onApplyShapeFill = vi.fn();
+    render(<Inspector element={element} page={page} values={{ "visual.accent_color": "#d40511" }} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyShapeFill={onApplyShapeFill} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Shape fill source" }), { target: { value: "visual.accent_color" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply shape fill" }));
+    expect(onApplyShapeFill).toHaveBeenCalledWith("label", { kind: "binding", path: "visual.accent_color" });
+    expect(screen.getByLabelText("Shape fill")).toBeDisabled();
   });
 
   it("preserves bound text and color when changing only font styling", () => {

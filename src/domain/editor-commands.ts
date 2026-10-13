@@ -1,4 +1,4 @@
-import type { ColorBinding, Element, ElementGeometry, PageGeometry, TemplateDocument, TextBinding, TextStyle } from "./template-document";
+import type { ColorBinding, ColorBindingPath, Element, ElementGeometry, PageGeometry, TemplateDocument, TextBinding, TextStyle } from "./template-document";
 
 export type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 export type ElementOrder = "front" | "back" | "forward" | "backward";
@@ -12,7 +12,7 @@ export type EditorCommand =
   | { readonly type: "set_element_visible"; readonly element_id: string; readonly visible: boolean }
   | { readonly type: "set_element_locked"; readonly element_id: string; readonly locked: boolean }
   | { readonly type: "set_text_authoring"; readonly element_id: string; readonly content?: TextBinding; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly font_style?: TextStyle["font_style"]; readonly horizontal_align?: TextStyle["horizontal_align"]; readonly vertical_align?: TextStyle["vertical_align"]; readonly color?: ColorBinding }
-  | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: string }
+  | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: ColorBinding }
   | { readonly type: "add_element"; readonly element: Element }
   | { readonly type: "remove_element"; readonly element_id: string };
 
@@ -133,10 +133,11 @@ export function applyEditorCommand(document: TemplateDocument, command: EditorCo
         };
       });
     case "set_shape_fill":
-      if (!validHexColor(command.color)) throw new RangeError("Shape fill must use a hexadecimal color value.");
+      if (command.color.kind === "literal" && !validHexColor(command.color.value)) throw new RangeError("Shape fill must use a hexadecimal color value.");
+      if (command.color.kind === "binding" && !["visual.accent_color", "brand.primary_color"].includes(command.color.path)) throw new RangeError("Shape fill binding path is not supported.");
       return updateElement(document, command.element_id, (element) => {
         if (element.type !== "rectangle" && element.type !== "band" && element.type !== "background") throw new Error(`Element ${element.id} does not support a shape fill.`);
-        return { ...element, style: { ...element.style, fill: { kind: "literal", value: command.color } } };
+        return { ...element, style: { ...element.style, fill: command.color } };
       });
     case "add_element": {
       if (!command.element.id.trim()) throw new Error("Element ID cannot be empty.");

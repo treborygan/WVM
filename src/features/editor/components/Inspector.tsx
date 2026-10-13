@@ -41,15 +41,25 @@ export function Inspector({ element, page, values, onApplyGeometry, onApplyPage,
   readonly onApplyGeometry: (elementId: string, geometry: ElementGeometry) => void;
   readonly onApplyPage: (geometry: Pick<PageGeometry, "width_mm" | "height_mm" | "orientation">) => void;
   readonly onApplyTextAuthoring?: (elementId: string, authoring: TextAuthoring) => void;
-  readonly onApplyShapeFill?: (elementId: string, color: string) => void;
+  readonly onApplyShapeFill?: (elementId: string, color: ColorBinding) => void;
 }) {
   const [geometry, setGeometry] = useState<GeometryDraft | null>(() => geometryDraft(element));
   const [pageDraft, setPageDraft] = useState<PageDraft>(() => ({ width_mm: String(page.width_mm), height_mm: String(page.height_mm), orientation: page.orientation }));
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState<TextDraft | null>(() => textDraft(element, values));
   const [shapeFill, setShapeFill] = useState(() => element && (element.type === "rectangle" || element.type === "band" || element.type === "background") && element.style.fill.kind === "literal" ? element.style.fill.value : "#000000");
+  const [shapeFillSource, setShapeFillSource] = useState<"literal" | ColorBindingPath>(() => element && (element.type === "rectangle" || element.type === "band" || element.type === "background") && element.style.fill.kind === "binding" ? element.style.fill.path : "literal");
 
-  useEffect(() => { setGeometry(geometryDraft(element)); setText(textDraft(element, values)); setShapeFill(element && (element.type === "rectangle" || element.type === "band" || element.type === "background") && element.style.fill.kind === "literal" ? element.style.fill.value : "#000000"); setError(null); }, [element, values]);
+  useEffect(() => {
+    setGeometry(geometryDraft(element));
+    setText(textDraft(element, values));
+    const fill = element && (element.type === "rectangle" || element.type === "band" || element.type === "background") ? element.style.fill : null;
+    setShapeFillSource(fill?.kind === "binding" ? fill.path : "literal");
+    const boundFill = fill?.kind === "binding" ? values?.[fill.path] : null;
+    const currentFill = fill?.kind === "literal" ? fill.value : typeof boundFill === "string" && /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(boundFill) ? boundFill : "#000000";
+    setShapeFill(currentFill);
+    setError(null);
+  }, [element, values]);
   useEffect(() => { setPageDraft({ width_mm: String(page.width_mm), height_mm: String(page.height_mm), orientation: page.orientation }); }, [page]);
 
   function applyElement(event: FormEvent<HTMLFormElement>) {
@@ -96,9 +106,9 @@ export function Inspector({ element, page, values, onApplyGeometry, onApplyPage,
 
   function applyShapeFill(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!element || (element.type !== "rectangle" && element.type !== "band" && element.type !== "background") || element.style.fill.kind !== "literal") return;
+    if (!element || (element.type !== "rectangle" && element.type !== "band" && element.type !== "background")) return;
     setError(null);
-    onApplyShapeFill?.(element.id, shapeFill);
+    onApplyShapeFill?.(element.id, shapeFillSource === "literal" ? { kind: "literal", value: shapeFill } : { kind: "binding", path: shapeFillSource });
   }
 
   return <aside className="editor-inspector" aria-label="Document inspector">
@@ -136,9 +146,10 @@ export function Inspector({ element, page, values, onApplyGeometry, onApplyPage,
     </form> : null}
     {element && (element.type === "rectangle" || element.type === "band" || element.type === "background") ? <form className="inspector-section" onSubmit={applyShapeFill}>
       <h3>Shape style</h3>
-      <label>Fill color<input aria-label="Shape fill" type="color" value={shapeFill} disabled={element.locked || element.style.fill.kind !== "literal"} onChange={(event) => setShapeFill(event.target.value)} /></label>
-      {element.style.fill.kind === "binding" ? <p className="inspector-binding-note">Fill is bound and cannot be changed here.</p> : null}
-      <button className="button button-secondary" type="submit" disabled={element.locked || element.style.fill.kind !== "literal" || !onApplyShapeFill}>Apply shape fill</button>
+      <label>Fill source<select aria-label="Shape fill source" value={shapeFillSource} disabled={element.locked} onChange={(event) => setShapeFillSource(event.target.value as "literal" | ColorBindingPath)}><option value="literal">Fixed color</option><option value="visual.accent_color">Visual accent color</option><option value="brand.primary_color">Brand primary color</option></select></label>
+      <label>Fill color<input aria-label="Shape fill" type="color" value={shapeFill} disabled={element.locked || shapeFillSource !== "literal"} onChange={(event) => setShapeFill(event.target.value)} /></label>
+      {shapeFillSource !== "literal" ? <p className="inspector-binding-note">Preview uses the selected color field when it is available.</p> : null}
+      <button className="button button-secondary" type="submit" disabled={element.locked || !onApplyShapeFill}>Apply shape fill</button>
     </form> : null}
     {error ? <p className="inspector-error" role="alert">{error}</p> : null}
   </aside>;

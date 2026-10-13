@@ -29,8 +29,10 @@ describe("editor style commands", () => {
   });
 
   it("updates literal shape fill without changing its stroke", () => {
-    const updated = applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: "#ffcc00" });
+    const updated = applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: { kind: "literal", value: "#ffcc00" } });
     expect(updated.elements[1]).toMatchObject({ style: { fill: { kind: "literal", value: "#ffcc00" }, stroke: null } });
+    const bound = applyEditorCommand(updated, { type: "set_shape_fill", element_id: "panel", color: { kind: "binding", path: "visual.accent_color" } });
+    expect(bound.elements[1]).toMatchObject({ style: { fill: { kind: "binding", path: "visual.accent_color" } } });
   });
 
   it("adds a new element above the existing paint order and rejects duplicate IDs", () => {
@@ -52,7 +54,8 @@ describe("editor style commands", () => {
 
   it("rejects invalid font sizes and colors", () => {
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 0, font_weight: "bold" })).toThrow(/font size/i);
-    expect(() => applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: "red" })).toThrow(/hexadecimal color/i);
+    expect(() => applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: { kind: "literal", value: "red" } })).toThrow(/hexadecimal color/i);
+    expect(() => applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: { kind: "binding", path: "visual.name" } as never })).toThrow(/binding path/i);
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 20, font_weight: "light" as never })).toThrow(/font weight/i);
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 20, font_weight: "normal", content: { kind: "literal", value: 123 } as never })).toThrow(/content must be a string/i);
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 20, font_weight: "normal", content: { kind: "binding", path: "visual.id" } as never })).toThrow(/binding path/i);
