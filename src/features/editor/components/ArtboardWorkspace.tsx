@@ -101,7 +101,9 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
       </div>
       <Inspector element={selectedElement} page={editedDocument.page}
         onApplyGeometry={(element_id, geometry) => run({ type: "set_element_geometry", element_id, geometry })}
-        onApplyPage={(geometry) => run({ type: "set_page_geometry", ...geometry })} />
+        onApplyPage={(geometry) => run({ type: "set_page_geometry", ...geometry })}
+        onApplyTextAuthoring={(element_id, authoring) => run({ type: "set_text_authoring", element_id, ...authoring })}
+        onApplyShapeFill={(element_id, color) => run({ type: "set_shape_fill", element_id, color })} />
     </div>
   </section>;
 }

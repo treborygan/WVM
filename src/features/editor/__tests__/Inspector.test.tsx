@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { Element, PageGeometry } from "../../../domain/template-document";
 import { Inspector } from "../components/Inspector";
 
-const element: Element = { id: "label", type: "rectangle", x_mm: 10, y_mm: 20, width_mm: 40, height_mm: 30, rotation_degrees: 0, z_index: 0, visible: true, locked: false, style: { fill: { kind: "literal", value: "#fff" }, stroke: null, stroke_width_mm: 0 } };
+const element: Element = { id: "label", type: "rectangle", x_mm: 10, y_mm: 20, width_mm: 40, height_mm: 30, rotation_degrees: 0, z_index: 0, visible: true, locked: false, style: { fill: { kind: "literal", value: "#ffffff" }, stroke: null, stroke_width_mm: 0 } };
+const textElement: Element = { id: "text-label", type: "text", x_mm: 10, y_mm: 20, width_mm: 40, height_mm: 15, rotation_degrees: 0, z_index: 0, visible: true, locked: false, content: { kind: "literal", value: "A-01" }, style: { font_family: "Arial", font_size_pt: 18, font_weight: 400, font_style: "normal", horizontal_align: "left", vertical_align: "middle", line_height: 1, wrapping: "nowrap", overflow: "clip", fit_policy: "none", color: { kind: "literal", value: "#111111" } } };
 const page: PageGeometry = { width_mm: 210, height_mm: 297, orientation: "portrait" };
 
 describe("Inspector", () => {
@@ -54,5 +55,35 @@ describe("Inspector", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply page size" }));
     expect(screen.getByRole("alert")).toHaveTextContent("finite positive millimetres");
     expect(onApplyPage).not.toHaveBeenCalled();
+  });
+
+  it("applies text content, font size, weight, and color as one edit", () => {
+    const onApplyTextAuthoring = vi.fn();
+    render(<Inspector element={textElement} page={page} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyTextAuthoring={onApplyTextAuthoring} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Text content" }), { target: { value: "B-04" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "24" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Font weight" }), { target: { value: "bold" } });
+    fireEvent.change(screen.getByLabelText("Text color"), { target: { value: "#d40511" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { value: "B-04", font_size_pt: 24, font_weight: "bold", color: "#d40511" });
+  });
+
+  it("applies shape fill while preserving other styling in the command", () => {
+    const onApplyShapeFill = vi.fn();
+    render(<Inspector element={element} page={page} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyShapeFill={onApplyShapeFill} />);
+    fireEvent.change(screen.getByLabelText("Shape fill"), { target: { value: "#ffcc00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply shape fill" }));
+    expect(onApplyShapeFill).toHaveBeenCalledWith("label", "#ffcc00");
+  });
+
+  it("preserves bound text and color when changing only font styling", () => {
+    const onApplyTextAuthoring = vi.fn();
+    const boundText: Element = { ...textElement, content: { kind: "binding", path: "visual.location" }, style: { ...textElement.style, color: { kind: "binding", path: "visual.accent_color" } } };
+    render(<Inspector element={boundText} page={page} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyTextAuthoring={onApplyTextAuthoring} />);
+    expect(screen.getByRole("textbox", { name: "Text content" })).toBeDisabled();
+    expect(screen.getByLabelText("Text color")).toBeDisabled();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "28" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { font_size_pt: 28, font_weight: 400 });
   });
 });

@@ -1,4 +1,4 @@
-import type { Element, ElementGeometry, PageGeometry, TemplateDocument } from "./template-document";
+import type { Element, ElementGeometry, PageGeometry, TemplateDocument, TextStyle } from "./template-document";
 
 export type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 export type ElementOrder = "front" | "back" | "forward" | "backward";
@@ -10,11 +10,17 @@ export type EditorCommand =
   | { readonly type: "set_page_geometry"; readonly width_mm: number; readonly height_mm: number; readonly orientation: PageGeometry["orientation"] }
   | { readonly type: "reorder_element"; readonly element_id: string; readonly position: ElementOrder }
   | { readonly type: "set_element_visible"; readonly element_id: string; readonly visible: boolean }
-  | { readonly type: "set_element_locked"; readonly element_id: string; readonly locked: boolean };
+  | { readonly type: "set_element_locked"; readonly element_id: string; readonly locked: boolean }
+  | { readonly type: "set_text_authoring"; readonly element_id: string; readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly color?: string }
+  | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: string };
 
 function finite(...values: number[]) {
   if (values.some((value) => !Number.isFinite(value))) throw new RangeError("Editor values must be finite.");
   if (values.some((value) => Math.abs(value) > Number.MAX_SAFE_INTEGER)) throw new RangeError("Editor values exceed the safe numeric range.");
+}
+
+function validHexColor(color: string): boolean {
+  return /^#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.test(color);
 }
 
 function indexOfElement(elements: readonly Element[], id: string): number {
@@ -101,5 +107,26 @@ export function applyEditorCommand(document: TemplateDocument, command: EditorCo
       return updateElement(document, command.element_id, (element) => ({ ...element, visible: command.visible }), false);
     case "set_element_locked":
       return updateElement(document, command.element_id, (element) => ({ ...element, locked: command.locked }), false);
+    case "set_text_authoring":
+      finite(command.font_size_pt, ...(typeof command.font_weight === "number" ? [command.font_weight] : []));
+      if (command.font_size_pt <= 0) throw new RangeError("Text font size must be positive.");
+      if (command.value !== undefined && typeof command.value !== "string") throw new TypeError("Text content must be a string.");
+      if (typeof command.font_weight === "string" && command.font_weight !== "normal" && command.font_weight !== "bold") throw new RangeError("Text font weight must be normal, bold, or a numeric weight.");
+      if (typeof command.font_weight === "number" && (command.font_weight < 100 || command.font_weight > 900 || command.font_weight % 100 !== 0)) throw new RangeError("Text weight must be between 100 and 900 in 100-point steps.");
+      if (command.color !== undefined && !validHexColor(command.color)) throw new RangeError("Text color must use a hexadecimal color value.");
+      return updateElement(document, command.element_id, (element) => {
+        if (element.type !== "text") throw new Error(`Element ${element.id} is not text.`);
+        if (command.value !== undefined && element.content.kind !== "literal") throw new Error(`Element ${element.id} does not have literal text content.`);
+        return { ...element,
+          ...(command.value !== undefined ? { content: { kind: "literal" as const, value: command.value } } : {}),
+          style: { ...element.style, font_size_pt: command.font_size_pt, font_weight: command.font_weight, ...(command.color !== undefined ? { color: { kind: "literal" as const, value: command.color } } : {}) },
+        };
+      });
+    case "set_shape_fill":
+      if (!validHexColor(command.color)) throw new RangeError("Shape fill must use a hexadecimal color value.");
+      return updateElement(document, command.element_id, (element) => {
+        if (element.type !== "rectangle" && element.type !== "band" && element.type !== "background") throw new Error(`Element ${element.id} does not support a shape fill.`);
+        return { ...element, style: { ...element.style, fill: { kind: "literal", value: command.color } } };
+      });
   }
 }
