@@ -11,7 +11,7 @@ export type EditorCommand =
   | { readonly type: "reorder_element"; readonly element_id: string; readonly position: ElementOrder }
   | { readonly type: "set_element_visible"; readonly element_id: string; readonly visible: boolean }
   | { readonly type: "set_element_locked"; readonly element_id: string; readonly locked: boolean }
-  | { readonly type: "set_text_authoring"; readonly element_id: string; readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly color?: string }
+  | { readonly type: "set_text_authoring"; readonly element_id: string; readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly font_style?: TextStyle["font_style"]; readonly horizontal_align?: TextStyle["horizontal_align"]; readonly vertical_align?: TextStyle["vertical_align"]; readonly color?: string }
   | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: string }
   | { readonly type: "add_element"; readonly element: Element }
   | { readonly type: "remove_element"; readonly element_id: string };
@@ -112,6 +112,9 @@ export function applyEditorCommand(document: TemplateDocument, command: EditorCo
     case "set_text_authoring":
       finite(command.font_size_pt, ...(typeof command.font_weight === "number" ? [command.font_weight] : []));
       if (command.font_size_pt <= 0) throw new RangeError("Text font size must be positive.");
+      if (command.font_style !== undefined && command.font_style !== "normal" && command.font_style !== "italic") throw new RangeError("Text font style must be normal or italic.");
+      if (command.horizontal_align !== undefined && !["left", "center", "right"].includes(command.horizontal_align)) throw new RangeError("Text alignment must be left, center, or right.");
+      if (command.vertical_align !== undefined && !["top", "middle", "bottom"].includes(command.vertical_align)) throw new RangeError("Text vertical alignment must be top, middle, or bottom.");
       if (command.value !== undefined && typeof command.value !== "string") throw new TypeError("Text content must be a string.");
       if (typeof command.font_weight === "string" && command.font_weight !== "normal" && command.font_weight !== "bold") throw new RangeError("Text font weight must be normal, bold, or a numeric weight.");
       if (typeof command.font_weight === "number" && (command.font_weight < 100 || command.font_weight > 900 || command.font_weight % 100 !== 0)) throw new RangeError("Text weight must be between 100 and 900 in 100-point steps.");
@@ -121,7 +124,11 @@ export function applyEditorCommand(document: TemplateDocument, command: EditorCo
         if (command.value !== undefined && element.content.kind !== "literal") throw new Error(`Element ${element.id} does not have literal text content.`);
         return { ...element,
           ...(command.value !== undefined ? { content: { kind: "literal" as const, value: command.value } } : {}),
-          style: { ...element.style, font_size_pt: command.font_size_pt, font_weight: command.font_weight, ...(command.color !== undefined ? { color: { kind: "literal" as const, value: command.color } } : {}) },
+          style: { ...element.style, font_size_pt: command.font_size_pt, font_weight: command.font_weight,
+            ...(command.font_style !== undefined ? { font_style: command.font_style } : {}),
+            ...(command.horizontal_align !== undefined ? { horizontal_align: command.horizontal_align } : {}),
+            ...(command.vertical_align !== undefined ? { vertical_align: command.vertical_align } : {}),
+            ...(command.color !== undefined ? { color: { kind: "literal" as const, value: command.color } } : {}) },
         };
       });
     case "set_shape_fill":

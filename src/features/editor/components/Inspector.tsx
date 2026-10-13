@@ -5,7 +5,7 @@ import "./editor.css";
 
 type GeometryDraft = Record<keyof ElementGeometry, string>;
 type PageDraft = { readonly width_mm: string; readonly height_mm: string; readonly orientation: PageGeometry["orientation"] };
-type TextDraft = { readonly value: string; readonly font_size_pt: string; readonly font_weight: string; readonly color: string };
+type TextDraft = { readonly value: string; readonly font_size_pt: string; readonly font_weight: string; readonly font_style: TextStyle["font_style"]; readonly horizontal_align: TextStyle["horizontal_align"]; readonly vertical_align: TextStyle["vertical_align"]; readonly color: string };
 
 function geometryDraft(element?: Element): GeometryDraft | null {
   if (!element) return null;
@@ -18,11 +18,14 @@ function textDraft(element?: Element): TextDraft | null {
     value: element.content.kind === "literal" ? element.content.value : element.content.path,
     font_size_pt: String(element.style.font_size_pt),
     font_weight: String(element.style.font_weight),
+    font_style: element.style.font_style,
+    horizontal_align: element.style.horizontal_align,
+    vertical_align: element.style.vertical_align,
     color: element.style.color.kind === "literal" ? element.style.color.value : "#000000",
   };
 }
 
-type TextAuthoring = { readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly color?: string };
+type TextAuthoring = { readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly font_style: TextStyle["font_style"]; readonly horizontal_align: TextStyle["horizontal_align"]; readonly vertical_align: TextStyle["vertical_align"]; readonly color?: string };
 
 export function Inspector({ element, page, onApplyGeometry, onApplyPage, onApplyTextAuthoring, onApplyShapeFill }: {
   readonly element?: Element;
@@ -76,6 +79,9 @@ export function Inspector({ element, page, onApplyGeometry, onApplyPage, onApply
       ...(element.content.kind === "literal" ? { value: text.value } : {}),
       font_size_pt,
       font_weight,
+      font_style: text.font_style,
+      horizontal_align: text.horizontal_align,
+      vertical_align: text.vertical_align,
       ...(element.style.color.kind === "literal" ? { color: text.color } : {}),
     });
   }
@@ -111,6 +117,9 @@ export function Inspector({ element, page, onApplyGeometry, onApplyPage, onApply
       {element.content.kind === "binding" ? <p className="inspector-binding-note">Content is bound to {element.content.path}.</p> : null}
       <label>Font size (pt)<input aria-label="Font size (pt)" type="number" min="0.1" step="0.1" value={text.font_size_pt} disabled={element.locked} onChange={(event) => setText({ ...text, font_size_pt: event.target.value })} /></label>
       <label>Font weight<select aria-label="Font weight" value={text.font_weight} disabled={element.locked} onChange={(event) => setText({ ...text, font_weight: event.target.value })}><option value="normal">Normal</option><option value="bold">Bold</option><option value="400">400</option><option value="700">700</option><option value="900">900</option></select></label>
+      <label>Font style<select aria-label="Font style" value={text.font_style} disabled={element.locked} onChange={(event) => setText({ ...text, font_style: event.target.value as TextStyle["font_style"] })}><option value="normal">Normal</option><option value="italic">Italic</option></select></label>
+      <label>Horizontal alignment<select aria-label="Horizontal alignment" value={text.horizontal_align} disabled={element.locked} onChange={(event) => setText({ ...text, horizontal_align: event.target.value as TextStyle["horizontal_align"] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+      <label>Vertical alignment<select aria-label="Vertical alignment" value={text.vertical_align} disabled={element.locked} onChange={(event) => setText({ ...text, vertical_align: event.target.value as TextStyle["vertical_align"] })}><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></label>
       <label>Text color<input aria-label="Text color" type="color" value={text.color} disabled={element.locked || element.style.color.kind !== "literal"} onChange={(event) => setText({ ...text, color: event.target.value })} /></label>
       {element.style.color.kind === "binding" ? <p className="inspector-binding-note">Color is bound to {element.style.color.path}.</p> : null}
       <button className="button button-primary" type="submit" disabled={element.locked || !onApplyTextAuthoring}>Apply text style</button>

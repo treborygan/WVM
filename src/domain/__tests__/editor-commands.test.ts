@@ -16,8 +16,8 @@ const document: TemplateDocument = {
 
 describe("editor style commands", () => {
   it("updates literal text content and appearance immutably", () => {
-    const styled = applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", value: "B-04", font_size_pt: 24, font_weight: "bold", color: "#D40511" });
-    expect(styled.elements[0]).toMatchObject({ content: { kind: "literal", value: "B-04" }, style: { font_size_pt: 24, font_weight: "bold", color: { kind: "literal", value: "#D40511" } } });
+    const styled = applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", value: "B-04", font_size_pt: 24, font_weight: "bold", font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: "#D40511" });
+    expect(styled.elements[0]).toMatchObject({ content: { kind: "literal", value: "B-04" }, style: { font_size_pt: 24, font_weight: "bold", font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: { kind: "literal", value: "#D40511" } } });
     expect(document.elements[0]).toMatchObject({ content: { kind: "literal", value: "A-01" }, style: { font_size_pt: 18, color: { kind: "literal", value: "#111111" } } });
   });
 
@@ -48,6 +48,7 @@ describe("editor style commands", () => {
     expect(() => applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: "red" })).toThrow(/hexadecimal color/i);
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 20, font_weight: "light" as never })).toThrow(/font weight/i);
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 20, font_weight: "normal", value: 123 as never })).toThrow(/content must be a string/i);
+    expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 20, font_weight: "normal", horizontal_align: "justify" as never })).toThrow(/alignment/i);
   });
 
   it("rejects type mismatches, bindings, and locked targets", () => {

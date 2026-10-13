@@ -63,9 +63,12 @@ describe("Inspector", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Text content" }), { target: { value: "B-04" } });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "24" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Font weight" }), { target: { value: "bold" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Horizontal alignment" }), { target: { value: "center" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Vertical alignment" }), { target: { value: "bottom" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Font style" }), { target: { value: "italic" } });
     fireEvent.change(screen.getByLabelText("Text color"), { target: { value: "#d40511" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
-    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { value: "B-04", font_size_pt: 24, font_weight: "bold", color: "#d40511" });
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { value: "B-04", font_size_pt: 24, font_weight: "bold", font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: "#d40511" });
   });
 
   it("applies shape fill while preserving other styling in the command", () => {
@@ -84,6 +87,15 @@ describe("Inspector", () => {
     expect(screen.getByLabelText("Text color")).toBeDisabled();
     fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "28" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
-    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { font_size_pt: 28, font_weight: 400 });
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { font_size_pt: 28, font_weight: 400, font_style: "normal", horizontal_align: "left", vertical_align: "middle" });
+  });
+
+  it("keeps current alignment and font style when changing only the size", () => {
+    const onApplyTextAuthoring = vi.fn();
+    const centered: Element = { ...textElement, style: { ...textElement.style, horizontal_align: "center", vertical_align: "bottom", font_style: "italic" } };
+    render(<Inspector element={centered} page={page} onApplyGeometry={vi.fn()} onApplyPage={vi.fn()} onApplyTextAuthoring={onApplyTextAuthoring} />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Font size (pt)" }), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply text style" }));
+    expect(onApplyTextAuthoring).toHaveBeenCalledWith("text-label", { value: "A-01", font_size_pt: 20, font_weight: 400, font_style: "italic", horizontal_align: "center", vertical_align: "bottom", color: "#111111" });
   });
 });
