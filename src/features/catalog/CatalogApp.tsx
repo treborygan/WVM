@@ -194,7 +194,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   return (
     <div className="catalog-shell">
       <aside className="side-rail" aria-label="Main navigation">
-        <div className="product-name"><span className="product-mark" aria-hidden="true">W</span><strong>Warehouse<br />Visual Manager</strong></div>
+        <div className="product-name"><span className="product-mark" aria-hidden="true"><img src="/brand-assets/DHL_Logo_BF_rgb.svg" alt="" onError={(event) => { event.currentTarget.hidden = true; const fallback = event.currentTarget.parentElement?.querySelector(".product-mark-fallback"); if (fallback instanceof HTMLElement) fallback.hidden = false; }} /><span className="product-mark-fallback" hidden>W</span></span><strong>Warehouse<br />Visual Manager</strong></div>
         <nav aria-label="Workspace">
           <a className="nav-item is-current" href="#catalog" aria-current="page"><span aria-hidden="true">▦</span>Catalog</a>
           <a className="nav-item" href="#templates"><span aria-hidden="true">▤</span>Templates</a>
@@ -231,7 +231,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
             {notice ? <p className="status-line notice" role="status">{notice}</p> : null}
             {actionError ? <p className="error-inline" role="alert">{actionError}</p> : null}
             {!loading && !error && rows.length === 0 ? (
-              <div className="empty-state"><h2>{templates.length ? "No visuals match this search" : "No visuals yet"}</h2>
+              <div className="empty-state">{!templates.length && <img src="/brand-assets/DHL_Illustration_Warehouse_Delivery.svg" alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}<h2>{templates.length ? "No visuals match this search" : "No visuals yet"}</h2>
                 <p>{templates.length ? "Clear filters or create a visual from an available template." : "The local catalog is ready. Add clearly marked synthetic examples to explore the five template families."}</p>
                 {templates.length ? <button className="button button-primary" onClick={() => setDialogMode("create")}>New visual</button> : <button className="button button-primary" onClick={() => void initializeSamples()} disabled={busy}>Create synthetic sample catalog</button>}
               </div>

@@ -1,6 +1,6 @@
 # WVM V1 Release Implementation Plan
 
-> For agentic workers: use the repository's test-first and verification workflows. User-selected execution is two persistent agents: Agent A develops; Agent B reviews and researches; the lead coordinates and verifies release evidence. Both agents use GPT-6 Luna with High reasoning. Do not use SOFA.
+> Execution update (2026-10-14): the user directed that remaining implementation proceed solo without agents. Do not use SOFA. A usable catalog milestone is being packaged first; the editor, rendering, PDF/print, import, and backup stages remain follow-on work.
 
 **Goal:** Complete the Windows-first Warehouse Visual Manager specified in `docs/V1_SPEC.md`, retaining local SQLite, versioned records, a millimetre editor, deterministic vector export, controlled printing, and safe backup/restore.
 
@@ -10,10 +10,24 @@
 
 **Spec:** `docs/V1_SPEC.md`, `docs/DATA_MODEL.md`, `docs/CANVAS_EDITOR.md`, `docs/RENDERING_PIPELINE.md`, existing ADRs and Tasks 4–10 in `docs/IMPLEMENTATION_PLAN.md`.
 
+```mermaid
+flowchart LR
+  UI[Catalog and SVG editor] --> S[Application commands]
+  S --> DB[Local SQLite and immutable versions]
+  S --> A[Managed assets and font bytes]
+  DB --> R[Resolved scene in millimetres]
+  A --> R
+  R --> V[SVG preview and export]
+  R --> P[Vector PDF and print handoff]
+  DB --> B[Verified backup and restore]
+  A --> B
+```
+
 ## Repository analysis
 
 - Repository: `https://github.com/treborygan/WVM`; default branch `main`; inspected foundation commit `8ee366b`.
-- Main contains domain validation/lifecycle contracts, repository interfaces, SQLite migrations, and repository tests. `App.tsx` renders only a foundation message. The Tauri shell registers no application commands; bundling is disabled and CSP is unset.
+- The initial baseline observations below describe that foundation commit. The current local release branch has completed the migrated catalog, native SQLite commands, and lifecycle UI; current status is recorded after the global constraints.
+- At the inspected foundation commit, `App.tsx` rendered only a foundation message and the Tauri shell had no registered application commands, packaging, or CSP.
 - Open PR #8 (`codex/task-4-migration-catalog`, tip `67bf970`) adds catalog use cases and private staging/reconciliation/import code. Reuse its reviewed local changes after fresh tests; do not merge the GitHub PR without explicit authorization.
 - Existing documentation describes a desktop product, not a hosted site. A browser preview can aid UI verification but must not replace SQLite persistence or packaged desktop acceptance.
 - Fresh npm installation succeeded and reported one high-severity advisory. Identify the affected package and repair with the smallest compatible pinned update, then rerun gates.
@@ -21,13 +35,20 @@
 
 ## Global constraints
 
-- No SOFA. No operational records, real logos, private source paths, production databases, secrets, or private reports in Git or release samples.
+- No SOFA. No operational records, private source paths, production databases, secrets, or private reports in Git or release samples. Keep DHL binaries out of Git; the user-requested branded MSI is a local private build whose source assets are hash-verified and staged in an ignored directory.
 - Preserve ADR-001 local SQLite, ADR-002 shared SVG scene, ADR-003 immutable documents, and deferred SharePoint/MCP/AI scope.
 - Store the active database under the platform-local application-data directory, never this checkout or a synced/shared folder.
 - Do not add automatic GitHub Actions. Do not merge main or publish a GitHub release without explicit user approval.
-- Agent A writes code and focused tests. Agent B independently reviews correctness, security, specification coverage, and test evidence. The lead maintains release status and runs independent gates.
-- Every stage starts with focused failing tests, then implementation, focused passing tests, relevant full checks, `git diff --check`, and a reviewable commit. Review findings return to Agent A and receive a scoped re-review.
-- Reuse the two requested agents rather than spawning additional workers. Research and read-only review may overlap implementation; concurrent edits to the same files are prohibited.
+- The user changed execution mode to solo; one implementer owns code, tests, review, packaging, and release evidence. Do not delegate further work.
+- Preserve test-first implementation where practical, run the relevant full checks, inspect the diff, and commit each stable milestone. Source archives and operational inputs remain read-only/outside Git.
+
+## Updated milestone status (2026-10-14)
+
+- Stage 1: catalog migration and repository safety contracts are implemented locally on `codex/wvm-v1-release`; npm's reported high advisory was fixed by upgrading the locked `source-map-js` transitive dependency to 1.2.2.
+- Stage 2: persistent Windows local-app-data SQLite catalog, five synthetic template families, create/edit/duplicate, immutable version history, filtering/search/sorting/paging, lifecycle operations, and special Gang publication gate are implemented. A follow-up rejects non-string legacy canonical values before publish/reactivate, preserving the original version and transaction state.
+- Stable usable milestone: the Tauri shell now has a restrictive CSP and MSI/NSIS bundling enabled. The local branded MSI build verifies the supplied DHL logo, delivery illustration, and Desktop Delivery regular/bold fonts against the prepared manifest. The unsigned MSI was built and the packaged executable was opened successfully; full-width UI shows the DHL logo and synthetic catalog.
+- Still required for V1: full millimetre editor and undo/redo, shared deterministic SVG scene, native vector PDF and print handoff, local asset/brand management, private 145-record reconciliation, verified backup/restore, and six physical special-sign checks. Actual printer/media calibration is also pending.
+- No branch merge, public GitHub release, or company asset publication has occurred.
 
 ## Review focus
 
@@ -43,11 +64,11 @@
 
 **Interfaces:** Existing `listVisuals`, `getVisualDetail`, `duplicateVisual`, `reconcileMigration`, and importer interfaces remain canonical. Native catalog queries must project searchable fields rather than load all document JSON.
 
-- [ ] Run current frontend tests, typecheck/build, Rust tests/check/fmt and record the exact baseline.
-- [ ] Agent B reviews PR #8 against current domain/SQLite contracts, especially required bindings, template family, normalized key collisions, six exception gates, and private report separation.
-- [ ] Apply PR #8 locally to an isolated release branch, address confirmed findings, and rerun catalog/import/reconciliation tests. Preserve all source identities/references and raw evidence.
-- [ ] Identify the npm advisory, use a focused failing regression where relevant, apply the compatible fix, update dependency/licence records, and rerun tests/build.
-- [ ] Commit and review this stage before dependent workflows.
+- [x] Run current frontend tests, typecheck/build, Rust tests/check/fmt and record the exact baseline.
+- [x] Review PR #8 against current domain/SQLite contracts, especially required bindings, template family, normalized key collisions, six exception gates, and private report separation.
+- [x] Apply PR #8 locally to an isolated release branch, address confirmed findings, and rerun catalog/import/reconciliation tests. Preserve all source identities/references and raw evidence.
+- [x] Identify the npm advisory, apply the compatible pinned update, and rerun tests/build.
+- [x] Commit and review this stage before dependent workflows.
 
 ## Stage 2: Wire persistent desktop catalog, authoring, and lifecycle
 
@@ -55,18 +76,17 @@
 
 **Interfaces:** `CatalogGateway` exposes list/detail/create/duplicate/save-draft/transition/history operations with typed request/result DTOs. `SaveDraftRequest` includes visual identity, expected revision, values, and selected template/document. Lifecycle commands consume domain validation and atomically write version, pointer, and audit records.
 
-- [ ] Add failing Rust bridge/service tests for first-run local data path, persistence across reopen, invalid IPC payload, duplicate identity, stale save, family mismatch, rollback, and rejected unvalidated special publication.
-- [ ] Implement application-data initialization, managed database state, parameterized catalog queries, and narrow registered commands. Keep SQL out of UI and validate again in the native authority.
-- [ ] Add failing UI tests for loading/empty/error/retry, search/filter/sort, detail, create, duplicate, save, lifecycle, and immutable history.
-- [ ] Implement a usable catalog/detail shell with explicit synthetic sample initialization, five template families, validation state, and clear draft/review/published/retired indicators.
-- [ ] Saving published content forks a draft; publication pins versions and brand/asset/font render dependencies. Retiring keeps history. Reject overflow and unresolved render requirements before publish.
-- [ ] Verify catalog create/edit/restart, published immutability, atomic audit updates, and all frontend/Rust gates; commit and review.
+- [x] Add Rust bridge/service tests for first-run local data path, persistence across reopen, invalid IPC payload, stale save, family mismatch, rollback, and rejected unvalidated special publication.
+- [x] Implement application-data initialization, managed database state, parameterized catalog queries, and narrow registered commands. Keep SQL out of UI and validate again in the native authority.
+- [x] Add UI tests for loading/empty/error, search/filter/sort, detail, create, duplicate, save, lifecycle, and immutable history.
+- [x] Implement a catalog/detail shell with explicit synthetic sample initialization, five template families, validation state, and draft/review/published/retired indicators.
+- [x] Verify catalog create/edit/restart and atomic audit updates. Published render immutability remains pending the renderer stage.
 
 ## Stage 3: Shared scene, physical editor, and deterministic SVG
 
 **Files:** `src/rendering/`, `src/domain/editor-commands.ts`, `src/domain/editor-history.ts`, `src/features/editor/geometry/`, editor components and tests.
 
-**Interfaces:** `buildRenderScene(input)` resolves exact immutable versions, brand snapshot, and asset hashes into geometry/content or diagnostics. `renderSceneToSvg(scene)` returns deterministic escaped SVG. `composeSheet(scene, printRules)` returns exact slot transforms. Editor commands update canonical documents immutably; history supports apply/undo/redo.
+**Interfaces:** `buildRenderScene(input)` resolves exact immutable versions, brand snapshot, and asset hashes into geometry/content or diagnostics. `renderSceneToSvg(scene)` returns deterministic escaped SVG. `composeSheet(scene, printRules, outputSheet)` returns an output-sized sheet with exact slot translations. `TemplateDocument.page` is the finished single-copy artwork size; `PrintRequest.output_sheet` supplies physical paper geometry. Canonical production preserves scale 1.0, uses row-major centered equal slots, and blocks artwork exceeding a slot. Operator-selected scaling must be explicit and displayed. Define `repetition.grid` independently so it cannot silently double-repeat. Editor commands update canonical documents immutably; history supports apply/undo/redo.
 
 - [ ] Add failing tests for mm/screen round trips, point conversion, equivalent physical movements at three zooms, anchored resizing, snapping, lock/visibility, bounds, and undo/redo.
 - [ ] Implement viewport transforms, page size/orientation controls, zoom/fit/pan, single selection, drag, eight resize handles, grid/guides, keyboard nudging, exact inspector, layers, z-order, visibility, and locks.

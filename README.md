@@ -10,9 +10,11 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 - Published versions are immutable; lifecycle is Draft → Review → Published → Retired.
 - SharePoint, API hosting, MCP, ChatGPT, and AI features are future adapters or post-V1 scope, not V1 dependencies.
 
-## Status
+## Current usable release
 
-Tasks 1–3 provide the verified application foundation, canonical TypeScript domain contracts, repository ports, and local SQLite persistence with transactional migrations and immutable version records. Task 4 adds catalog read/duplicate workflows and a synthetic-tested private migration staging, reconciliation, and import boundary. The editor, renderer, PDF, print, and post-V1 integrations remain unimplemented.
+The Windows desktop catalog release provides a local SQLite-backed catalog with search, filters, sorting, paging, record creation/editing/duplication, immutable version history, lifecycle transitions, and a publication gate for special Gang records. It includes clearly marked synthetic examples for the five template families. Data is stored under Windows local application data, and the branded local MSI build uses the supplied DHL logo and Desktop Delivery fonts after manifest hash checks.
+
+The millimetre canvas editor, deterministic SVG/PDF generation, print handoff, private legacy import UI, and verified backup/restore are still planned. This release is a usable catalog foundation, not a completed V1 production sign-authoring workflow. No real warehouse data is included; the local QA catalog contains synthetic examples only.
 
 ## Development
 
@@ -26,6 +28,14 @@ npm run build
 ```
 
 Start the desktop development shell with `npm run desktop:dev`. The host must have the [Tauri 2 platform prerequisites](https://v2.tauri.app/start/prerequisites/) installed. Run the Rust gates independently with `cargo test --manifest-path src-tauri/Cargo.toml` and `cargo check --manifest-path src-tauri/Cargo.toml`.
+
+To build a branded local MSI, prepare the user-provided brand pack into the ignored `public/brand-assets/` directory and verify its file hashes:
+
+```powershell
+.\scripts\build-local-dhl-release.ps1 -BrandPackPath 'C:\path\to\verified\brand-pack'
+```
+
+The script bundles only the DHL screen logo, a warehouse delivery illustration, and the selected Desktop Delivery regular/bold fonts. Those company assets remain excluded from Git; keep the resulting MSI and complete asset pack within the authorized internal use scope. The build is unsigned and requires Windows WebView2 at runtime.
 
 ## Canonical documentation
 

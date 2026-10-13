@@ -827,8 +827,14 @@ fn validate_projection_matches(values: &Value, visual: &VisualFields) -> AppResu
     ];
     for (key, projected) in fields {
         if let Some(value) = values.get(key) {
-            let content = value.as_str();
-            if content != projected {
+            let matches = match value {
+                Value::String(content) => projected == Some(content.as_str()),
+                Value::Null => projected.is_none(),
+                // Legacy versions may omit canonical keys, but a present key
+                // must use the string/null representation of the projection.
+                _ => false,
+            };
+            if !matches {
                 return Err(format!(
                     "Visual projection field '{key}' does not match its version content."
                 ));
@@ -1435,8 +1441,8 @@ mod tests {
         seed_template(&database, "gang-standard-2up", "gang", true);
         let old_values = json!({ "location": "CONTRADICTORY-99" });
         let visual = seed_visual_with_version(&database, old_values.clone(), false);
-        let gateway = CatalogGateway::new(&database);
-        let review = gateway
+        let catalog = CatalogGateway::new(&database);
+        let review = catalog
             .transition(TransitionRequest {
                 visual_id: visual.id.clone(),
                 expected_state: "Draft".to_owned(),
@@ -1445,7 +1451,7 @@ mod tests {
                 actor: None,
             })
             .expect("legacy version enters review");
-        let result = gateway.transition(TransitionRequest {
+        let result = catalog.transition(TransitionRequest {
             visual_id: visual.id.clone(),
             expected_state: "Review".to_owned(),
             expected_revision_id: review.current_version.as_ref().unwrap().id.clone(),
@@ -1454,10 +1460,70 @@ mod tests {
         });
 
         assert!(result.unwrap_err().contains("location"));
-        let unchanged = gateway
+        let unchanged = catalog
             .detail(&visual.id)
             .expect("visual remains reviewable");
         assert_eq!(unchanged.visual.lifecycle_state, "Review");
+        assert_eq!(unchanged.history.len(), 1);
+        assert_eq!(unchanged.history[0].values, old_values);
+    }
+
+    #[test]
+    fn non_string_legacy_projection_is_rejected_without_partial_publish_or_reactivation() {
+        let (_directory, database) = gateway();
+        seed_template(&database, "gang-standard-2up", "gang", true);
+        let old_values = json!({ "location": 123 });
+        let visual = seed_visual_with_version(&database, old_values.clone(), false);
+        let catalog = CatalogGateway::new(&database);
+        let review = catalog
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Draft".to_owned(),
+                expected_revision_id: "legacy-version-1".to_owned(),
+                action: LifecycleAction::SubmitForReview,
+                actor: None,
+            })
+            .expect("legacy version enters review");
+        let result = catalog.transition(TransitionRequest {
+            visual_id: visual.id.clone(),
+            expected_state: "Review".to_owned(),
+            expected_revision_id: review.current_version.as_ref().unwrap().id.clone(),
+            action: LifecycleAction::Publish,
+            actor: None,
+        });
+
+        assert!(result.unwrap_err().contains("location"));
+        let unchanged = catalog
+            .detail(&visual.id)
+            .expect("visual remains reviewable");
+        assert_eq!(unchanged.visual.lifecycle_state, "Review");
+        assert_eq!(unchanged.history.len(), 1);
+        assert_eq!(unchanged.history[0].values, old_values);
+
+        let (_directory, database) = gateway();
+        seed_template(&database, "gang-standard-2up", "gang", true);
+        let visual = seed_visual_with_version(&database, old_values.clone(), true);
+        let gateway = CatalogGateway::new(&database);
+        let retired = gateway
+            .transition(TransitionRequest {
+                visual_id: visual.id.clone(),
+                expected_state: "Published".to_owned(),
+                expected_revision_id: "legacy-version-1".to_owned(),
+                action: LifecycleAction::Retire,
+                actor: None,
+            })
+            .expect("legacy visual retires");
+        let result = gateway.transition(TransitionRequest {
+            visual_id: visual.id.clone(),
+            expected_state: "Retired".to_owned(),
+            expected_revision_id: retired.current_version.as_ref().unwrap().id.clone(),
+            action: LifecycleAction::Reactivate,
+            actor: None,
+        });
+
+        assert!(result.unwrap_err().contains("location"));
+        let unchanged = gateway.detail(&visual.id).expect("visual remains retired");
+        assert_eq!(unchanged.visual.lifecycle_state, "Retired");
         assert_eq!(unchanged.history.len(), 1);
         assert_eq!(unchanged.history[0].values, old_values);
     }
