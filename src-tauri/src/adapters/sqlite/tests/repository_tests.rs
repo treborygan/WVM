@@ -204,6 +204,7 @@ fn repository_contract_preserves_stable_ids_and_searches_catalog_fields() {
                 search: Some("outbound".to_owned()),
                 lifecycle_state: Some("Draft".to_owned()),
                 template_family: Some("gang-standard-2up".to_owned()),
+                ..Default::default()
             },
         )
         .expect("visual list");
@@ -232,6 +233,146 @@ fn repository_contract_preserves_stable_ids_and_searches_catalog_fields() {
     assert_eq!(by_location.len(), 2);
     assert_eq!(special_templates.len(), 1);
     assert_eq!(special_templates[0].id, "legacy-template-special");
+}
+
+#[test]
+fn repository_contract_searches_legacy_source_metadata() {
+    let (_directory, database) = open_database();
+    add_parent_records(&database);
+    let connection = database.connect().expect("connection opens");
+    connection
+        .execute(
+            "INSERT INTO legacy_source_references
+             (id, visual_id, source_id, source_name, raw_source_text, migration_batch, validation_state)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                "source-reference-1",
+                "visual-1",
+                "LEGACY-REF-42",
+                "synthetic-origin.pptx",
+                "Original synthetic aisle evidence",
+                "synthetic-batch",
+                "unreviewed"
+            ],
+        )
+        .expect("synthetic source reference inserts");
+
+    for search in ["LEGACY-REF-42", "synthetic-origin.pptx", "aisle evidence"] {
+        let found = VisualRepository
+            .list(
+                &connection,
+                &VisualListQuery {
+                    search: Some(search.to_owned()),
+                    ..Default::default()
+                },
+            )
+            .expect("catalog search runs");
+        assert_eq!(
+            found
+                .iter()
+                .map(|visual| visual.id.as_str())
+                .collect::<Vec<_>>(),
+            ["visual-1"]
+        );
+    }
+}
+
+#[test]
+fn repository_contract_filters_sorts_and_pages_catalog_rows_in_sqlite() {
+    let (_directory, database) = open_database();
+    add_parent_records(&database);
+    let connection = database.connect().expect("connection opens");
+    let mut second = visual("visual-2", "template-1", "Synthetic B", "outbound");
+    second.location = Some("B-02".to_owned());
+    VisualRepository
+        .create(&connection, &second)
+        .expect("second visual inserts");
+    let mut third = visual("visual-3", "template-1", "Synthetic C", "returns");
+    third.location = Some("C-03".to_owned());
+    VisualRepository
+        .create(&connection, &third)
+        .expect("third visual inserts");
+    for (reference_id, visual_id, source_id) in [
+        ("source-reference-1", "visual-1", "BATCH-REF-A"),
+        ("source-reference-2", "visual-2", "BATCH-REF-B"),
+        ("source-reference-3", "visual-3", "UNRELATED"),
+    ] {
+        connection.execute(
+            "INSERT INTO legacy_source_references
+             (id, visual_id, source_id, source_name, raw_source_text, migration_batch, validation_state)
+             VALUES (?1, ?2, ?3, 'synthetic-origin.pptx', 'private raw sample text', 'synthetic-batch', 'unreviewed')",
+            params![reference_id, visual_id, source_id],
+        ).expect("synthetic source reference inserts");
+    }
+
+    let first = VisualRepository
+        .list_page(
+            &connection,
+            &VisualListQuery {
+                legacy_source: Some("batch-ref".to_owned()),
+                location: Some("-0".to_owned()),
+                sort_by: Some("location".to_owned()),
+                sort_order: Some("desc".to_owned()),
+                page: 1,
+                page_size: 1,
+                ..Default::default()
+            },
+        )
+        .expect("filtered catalog page");
+    let second_page = VisualRepository
+        .list_page(
+            &connection,
+            &VisualListQuery {
+                legacy_source: Some("batch-ref".to_owned()),
+                location: Some("-0".to_owned()),
+                sort_by: Some("location".to_owned()),
+                sort_order: Some("desc".to_owned()),
+                page: 2,
+                page_size: 1,
+                ..Default::default()
+            },
+        )
+        .expect("second catalog page");
+
+    assert_eq!((first.total, first.total_pages), (2, 2));
+    assert_eq!(first.items[0].visual.id, "visual-2");
+    assert_eq!(first.items[0].template_family, "gang-standard-2up");
+    assert_eq!(
+        first.items[0].legacy_search_text.as_deref(),
+        Some("BATCH-REF-B synthetic-origin.pptx  ")
+    );
+    assert_eq!(second_page.items[0].visual.id, "visual-1");
+}
+
+#[test]
+fn repository_contract_rejects_unsafe_catalog_sort_and_page_values() {
+    let (_directory, database) = open_database();
+    add_parent_records(&database);
+    let connection = database.connect().expect("connection opens");
+    for query in [
+        VisualListQuery {
+            sort_by: Some("name; DROP TABLE visuals".to_owned()),
+            ..Default::default()
+        },
+        VisualListQuery {
+            sort_order: Some("sideways".to_owned()),
+            ..Default::default()
+        },
+        VisualListQuery {
+            page: 0,
+            ..Default::default()
+        },
+        VisualListQuery {
+            page_size: 201,
+            ..Default::default()
+        },
+    ] {
+        assert!(VisualRepository.list_page(&connection, &query).is_err());
+    }
+    assert!(VisualRepository
+        .get(&connection, "visual-1")
+        .expect("table remains queryable")
+        .is_some());
 }
 
 #[test]

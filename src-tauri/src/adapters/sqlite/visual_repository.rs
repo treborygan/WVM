@@ -7,11 +7,58 @@ use super::{
     append_audit_event, invalid_data, validate_id, validate_lifecycle_state, StorageResult,
 };
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct VisualListQuery {
     pub search: Option<String>,
+    pub visual_type: Option<String>,
     pub lifecycle_state: Option<String>,
     pub template_family: Option<String>,
+    pub stock_class: Option<String>,
+    pub location: Option<String>,
+    pub flow: Option<String>,
+    pub description: Option<String>,
+    pub legacy_source: Option<String>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
+    pub page: usize,
+    pub page_size: usize,
+}
+
+impl Default for VisualListQuery {
+    fn default() -> Self {
+        Self {
+            search: None,
+            visual_type: None,
+            lifecycle_state: None,
+            template_family: None,
+            stock_class: None,
+            location: None,
+            flow: None,
+            description: None,
+            legacy_source: None,
+            sort_by: None,
+            sort_order: None,
+            page: 1,
+            page_size: 50,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct CatalogVisualRecord {
+    pub visual: VisualRecord,
+    pub template_family: String,
+    pub legacy_search_text: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct CatalogVisualPage {
+    pub items: Vec<CatalogVisualRecord>,
+    pub page: usize,
+    pub page_size: usize,
+    pub total: usize,
+    pub total_pages: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -44,6 +91,19 @@ pub struct VisualVersionRecord {
     pub created_by: Option<String>,
     pub created_at: String,
     pub published_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct LegacySourceReferenceRecord {
+    pub id: String,
+    pub visual_id: String,
+    pub source_id: String,
+    pub source_name: String,
+    pub sheet_or_slide: Option<String>,
+    pub side: Option<String>,
+    pub raw_source_text: Option<String>,
+    pub migration_batch: String,
+    pub validation_state: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -119,6 +179,19 @@ impl VisualRepository {
         connection: &Connection,
         query: &VisualListQuery,
     ) -> StorageResult<Vec<VisualRecord>> {
+        Ok(self
+            .list_page(connection, query)?
+            .items
+            .into_iter()
+            .map(|record| record.visual)
+            .collect())
+    }
+
+    pub fn list_page(
+        &self,
+        connection: &Connection,
+        query: &VisualListQuery,
+    ) -> StorageResult<CatalogVisualPage> {
         if query
             .lifecycle_state
             .as_deref()
@@ -133,27 +206,122 @@ impl VisualRepository {
         {
             return Err(invalid_data("Unknown template family filter."));
         }
-        let search = query.search.as_deref().map(str::to_lowercase);
-        let mut statement = connection.prepare(
+        if query.page == 0 || query.page_size == 0 || query.page_size > 200 {
+            return Err(invalid_data(
+                "Catalog page must be positive and page_size must be between 1 and 200.",
+            ));
+        }
+        let offset = (query.page - 1)
+            .checked_mul(query.page_size)
+            .ok_or_else(|| invalid_data("Catalog page offset is outside the supported range."))?;
+        let sql_limit = i64::try_from(query.page_size)
+            .map_err(|_| invalid_data("Catalog page size is outside the supported range."))?;
+        let sql_offset = i64::try_from(offset)
+            .map_err(|_| invalid_data("Catalog page offset is outside the supported range."))?;
+        let sort_field = match query.sort_by.as_deref().unwrap_or("name") {
+            "name" => "v.name COLLATE NOCASE",
+            "visual_type" => "v.visual_type COLLATE NOCASE",
+            "template_family" => "t.family COLLATE NOCASE",
+            "stock_class" => "v.stock_class COLLATE NOCASE",
+            "location" => "v.location COLLATE NOCASE",
+            "flow" => "v.flow COLLATE NOCASE",
+            "description" => "v.description COLLATE NOCASE",
+            "lifecycle_state" => "v.lifecycle_state COLLATE NOCASE",
+            "legacy_source" => "coalesce((SELECT min(lower(sr.source_id || ' ' || sr.source_name)) FROM legacy_source_references sr WHERE sr.visual_id = v.id), '')",
+            _ => return Err(invalid_data("Unknown catalog sort field.")),
+        };
+        let direction = match query.sort_order.as_deref().unwrap_or("asc") {
+            "asc" => "ASC",
+            "desc" => "DESC",
+            _ => return Err(invalid_data("Unknown catalog sort order.")),
+        };
+        let normalize = |value: &Option<String>| {
+            value
+                .as_deref()
+                .map(|text| text.trim().to_lowercase())
+                .filter(|text| !text.is_empty())
+        };
+        let search = normalize(&query.search);
+        let stock_class = normalize(&query.stock_class);
+        let location = normalize(&query.location);
+        let flow = normalize(&query.flow);
+        let description = normalize(&query.description);
+        let legacy_source = normalize(&query.legacy_source);
+        let visual_type = query
+            .visual_type
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let lifecycle_state = query.lifecycle_state.as_deref();
+        let template_family = query.template_family.as_deref();
+        let predicates = "(?1 IS NULL OR instr(lower(v.name), ?1) > 0 OR instr(lower(v.visual_type), ?1) > 0
+            OR instr(lower(t.family), ?1) > 0 OR instr(lower(coalesce(v.stock_class, '')), ?1) > 0
+            OR instr(lower(coalesce(v.location, '')), ?1) > 0 OR instr(lower(coalesce(v.flow, '')), ?1) > 0
+            OR instr(lower(coalesce(v.description, '')), ?1) > 0 OR EXISTS (SELECT 1 FROM legacy_source_references sr
+                WHERE sr.visual_id = v.id AND (instr(lower(sr.source_id), ?1) > 0 OR instr(lower(sr.source_name), ?1) > 0
+                    OR instr(lower(coalesce(sr.sheet_or_slide, '')), ?1) > 0 OR instr(lower(coalesce(sr.side, '')), ?1) > 0
+                    OR instr(lower(coalesce(sr.raw_source_text, '')), ?1) > 0)))
+            AND (?2 IS NULL OR v.visual_type = ?2)
+            AND (?3 IS NULL OR v.lifecycle_state = ?3)
+            AND (?4 IS NULL OR t.family = ?4)
+            AND (?5 IS NULL OR instr(lower(coalesce(v.stock_class, '')), ?5) > 0)
+            AND (?6 IS NULL OR instr(lower(coalesce(v.location, '')), ?6) > 0)
+            AND (?7 IS NULL OR instr(lower(coalesce(v.flow, '')), ?7) > 0)
+            AND (?8 IS NULL OR instr(lower(coalesce(v.description, '')), ?8) > 0)
+            AND (?9 IS NULL OR EXISTS (SELECT 1 FROM legacy_source_references sr WHERE sr.visual_id = v.id
+                AND (instr(lower(sr.source_id), ?9) > 0 OR instr(lower(sr.source_name), ?9) > 0
+                    OR instr(lower(coalesce(sr.sheet_or_slide, '')), ?9) > 0 OR instr(lower(coalesce(sr.side, '')), ?9) > 0
+                    OR instr(lower(coalesce(sr.raw_source_text, '')), ?9) > 0)))";
+        let count_sql = format!("SELECT COUNT(*) FROM visuals v JOIN templates t ON t.id = v.template_id WHERE {predicates}");
+        let parameters = rusqlite::params![
+            search,
+            visual_type,
+            lifecycle_state,
+            template_family,
+            stock_class,
+            location,
+            flow,
+            description,
+            legacy_source
+        ];
+        let total_i64: i64 = connection.query_row(&count_sql, parameters, |row| row.get(0))?;
+        let total = usize::try_from(total_i64)
+            .map_err(|_| invalid_data("Catalog result count is outside the supported range."))?;
+        let list_sql = format!(
             "SELECT v.id, v.name, v.visual_type, v.template_id, v.stock_class, v.location, v.flow,
              v.description, v.accent_color, v.lifecycle_state, v.current_draft_version_id,
-             v.current_published_version_id, v.created_at, v.updated_at
-             FROM visuals v JOIN templates t ON t.id = v.template_id
-             WHERE (?1 IS NULL OR instr(lower(v.name), ?1) > 0 OR instr(lower(v.visual_type), ?1) > 0
-                OR instr(lower(t.family), ?1) > 0 OR instr(lower(coalesce(v.stock_class, '')), ?1) > 0
-                OR instr(lower(coalesce(v.location, '')), ?1) > 0 OR instr(lower(coalesce(v.flow, '')), ?1) > 0
-                OR instr(lower(coalesce(v.description, '')), ?1) > 0)
-               AND (?2 IS NULL OR v.lifecycle_state = ?2)
-               AND (?3 IS NULL OR t.family = ?3)
-             ORDER BY v.name COLLATE NOCASE, v.id",
-        )?;
-        let values = statement
+             v.current_published_version_id, v.created_at, v.updated_at, t.family,
+             (SELECT group_concat(sr.source_id || ' ' || sr.source_name || ' ' || coalesce(sr.sheet_or_slide, '') || ' ' || coalesce(sr.side, ''), ' ')
+                FROM legacy_source_references sr WHERE sr.visual_id = v.id)
+             FROM visuals v JOIN templates t ON t.id = v.template_id WHERE {predicates}
+             ORDER BY {sort_field} {direction}, v.id ASC LIMIT ?10 OFFSET ?11"
+        );
+        let mut statement = connection.prepare(&list_sql)?;
+        let mut values = statement
             .query_map(
-                rusqlite::params![search, query.lifecycle_state, query.template_family],
-                visual_from_row,
+                rusqlite::params![
+                    search,
+                    visual_type,
+                    lifecycle_state,
+                    template_family,
+                    stock_class,
+                    location,
+                    flow,
+                    description,
+                    legacy_source,
+                    sql_limit,
+                    sql_offset
+                ],
+                catalog_visual_from_row,
             )?
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(values)
+        Ok(CatalogVisualPage {
+            items: std::mem::take(&mut values),
+            page: query.page,
+            page_size: query.page_size,
+            total,
+            total_pages: total.div_ceil(query.page_size),
+        })
     }
 
     pub fn list_versions(
@@ -170,6 +338,128 @@ impl VisualRepository {
             .query_map([visual_id], visual_version_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(values)
+    }
+
+    pub fn list_source_references(
+        &self,
+        connection: &Connection,
+        visual_id: &str,
+    ) -> StorageResult<Vec<LegacySourceReferenceRecord>> {
+        let mut statement = connection.prepare(
+            "SELECT id, visual_id, source_id, source_name, sheet_or_slide, side, raw_source_text,
+             migration_batch, validation_state FROM legacy_source_references
+             WHERE visual_id = ?1 ORDER BY source_name COLLATE NOCASE, source_id, id",
+        )?;
+        let values = statement
+            .query_map([visual_id], |row| {
+                Ok(LegacySourceReferenceRecord {
+                    id: row.get(0)?,
+                    visual_id: row.get(1)?,
+                    source_id: row.get(2)?,
+                    source_name: row.get(3)?,
+                    sheet_or_slide: row.get(4)?,
+                    side: row.get(5)?,
+                    raw_source_text: row.get(6)?,
+                    migration_batch: row.get(7)?,
+                    validation_state: row.get(8)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(values)
+    }
+
+    pub fn add_source_reference(
+        &self,
+        transaction: &Transaction<'_>,
+        reference: &LegacySourceReferenceRecord,
+    ) -> StorageResult<()> {
+        validate_id(&reference.id)?;
+        validate_id(&reference.visual_id)?;
+        if reference.source_id.trim().is_empty()
+            || reference.source_name.trim().is_empty()
+            || reference.migration_batch.trim().is_empty()
+            || !matches!(
+                reference.validation_state.as_str(),
+                "unreviewed" | "pending" | "validated" | "rejected"
+            )
+        {
+            return Err(invalid_data(
+                "Source reference identity and validation state are required.",
+            ));
+        }
+        transaction.execute(
+            "INSERT INTO legacy_source_references(id, visual_id, source_id, source_name, sheet_or_slide,
+             side, raw_source_text, migration_batch, validation_state)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![reference.id, reference.visual_id, reference.source_id, reference.source_name,
+                reference.sheet_or_slide, reference.side, reference.raw_source_text,
+                reference.migration_batch, reference.validation_state],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_draft_projection(
+        &self,
+        transaction: &Transaction<'_>,
+        expected_revision_id: Option<&str>,
+        visual: &VisualRecord,
+    ) -> StorageResult<()> {
+        validate_id(&visual.id)?;
+        if visual.name.trim().is_empty()
+            || visual.visual_type.trim().is_empty()
+            || visual
+                .accent_color
+                .as_deref()
+                .is_some_and(|color| !valid_color_token(color))
+        {
+            return Err(invalid_data(
+                "Visual name, type, or accent color is invalid.",
+            ));
+        }
+        let updated = transaction.execute(
+            "UPDATE visuals SET name = ?1, visual_type = ?2, stock_class = ?3, location = ?4,
+             flow = ?5, description = ?6, accent_color = ?7, updated_at = ?8
+             WHERE id = ?9 AND COALESCE(current_draft_version_id, current_published_version_id) IS ?10",
+            params![visual.name, visual.visual_type, visual.stock_class, visual.location, visual.flow,
+                visual.description, visual.accent_color, visual.updated_at, visual.id, expected_revision_id],
+        )?;
+        if updated != 1 {
+            return Err(invalid_data(
+                "Draft save is stale; reload the visual before saving.",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn transition_state(
+        &self,
+        transaction: &Transaction<'_>,
+        visual_id: &str,
+        expected: &str,
+        next: &str,
+        audit: &AuditEventRecord,
+    ) -> StorageResult<()> {
+        validate_id(visual_id)?;
+        let allowed = matches!(
+            (expected, next),
+            ("Draft", "Review") | ("Review", "Draft") | ("Published", "Retired")
+        );
+        if !allowed || audit.entity_kind != "visual" || audit.entity_id != visual_id {
+            return Err(invalid_data(
+                "Lifecycle transition or audit event is invalid.",
+            ));
+        }
+        let updated = transaction.execute(
+            "UPDATE visuals SET lifecycle_state = ?1, updated_at = ?2 WHERE id = ?3 AND lifecycle_state = ?4",
+            params![next, audit.occurred_at, visual_id, expected],
+        )?;
+        if updated != 1 {
+            return Err(invalid_data(
+                "Lifecycle transition is stale or the visual was not found.",
+            ));
+        }
+        append_audit_event(transaction, audit)?;
+        Ok(())
     }
 
     pub fn add_version(
@@ -300,10 +590,15 @@ impl VisualRepository {
         let lifecycle_update = if published {
             ", lifecycle_state = 'Published'"
         } else {
+            ", lifecycle_state = 'Draft'"
+        };
+        let clear_draft_pointer = if published {
+            ", current_draft_version_id = NULL"
+        } else {
             ""
         };
         let sql = format!(
-            "UPDATE visuals SET {column} = ?1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'){lifecycle_update} WHERE id = ?2 AND EXISTS
+            "UPDATE visuals SET {column} = ?1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'){lifecycle_update}{clear_draft_pointer} WHERE id = ?2 AND EXISTS
              (SELECT 1 FROM visual_versions WHERE id = ?1 AND visual_id = ?2 AND {eligibility})"
         );
         if transaction.execute(&sql, params![version_id, visual_id])? != 1 {
@@ -400,6 +695,14 @@ fn visual_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<VisualRecord> {
         current_published_version_id: row.get(11)?,
         created_at: row.get(12)?,
         updated_at: row.get(13)?,
+    })
+}
+
+fn catalog_visual_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CatalogVisualRecord> {
+    Ok(CatalogVisualRecord {
+        visual: visual_from_row(row)?,
+        template_family: row.get(14)?,
+        legacy_search_text: row.get(15)?,
     })
 }
 

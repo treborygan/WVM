@@ -1,4 +1,5 @@
 mod asset_repository;
+mod catalog_gateway;
 mod template_repository;
 mod visual_repository;
 
@@ -10,11 +11,13 @@ use std::time::Duration;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 pub use asset_repository::{AssetRecord, AssetRepository};
+pub use catalog_gateway::CatalogGateway;
 pub use template_repository::{
     TemplateListQuery, TemplateRecord, TemplateRepository, TemplateVersionRecord,
 };
 pub use visual_repository::{
-    AuditEventRecord, VisualListQuery, VisualRecord, VisualRepository, VisualVersionRecord,
+    AuditEventRecord, CatalogVisualPage, CatalogVisualRecord, LegacySourceReferenceRecord,
+    VisualListQuery, VisualRecord, VisualRepository, VisualVersionRecord,
 };
 
 pub type StorageResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -82,6 +85,10 @@ impl SqliteDatabase {
     pub fn schema_version(&self) -> StorageResult<i64> {
         let connection = self.connect()?;
         current_schema_version(&connection)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 
