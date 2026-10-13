@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TemplateDocument } from "../../../domain/template-document";
@@ -23,5 +23,13 @@ describe("ArtboardWorkspace element authoring", () => {
     expect(screen.queryByText("New text")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(screen.getByText("New text")).toBeVisible();
+  });
+
+  it("exports the current edited document and reports the selected destination", async () => {
+    const onExportSvg = vi.fn().mockResolvedValue({ status: "saved", path: "C:\\Exports\\Aisle.svg", diagnostics: [] });
+    render(<ArtboardWorkspace document={document} versionNumber={1} values={{}} onClose={vi.fn()} onSaveDraft={vi.fn()} onExportSvg={onExportSvg} />);
+    fireEvent.click(screen.getByRole("button", { name: "Export SVG" }));
+    await waitFor(() => expect(onExportSvg).toHaveBeenCalledWith(document));
+    expect(await screen.findByText("SVG saved to C:\\Exports\\Aisle.svg.")).toBeVisible();
   });
 });

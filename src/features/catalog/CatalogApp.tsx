@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import type { TemplateFamily } from "../../domain/entities";
 import type { TemplateDocument } from "../../domain/template-document";
+import { exportTemplateDocumentAsSvg, type ExportSvgResult } from "../../application/export-template-svg";
+import { desktopSvgFilePort } from "../../adapters/desktop/svg-file-port";
 import { ArtboardWorkspace } from "../editor/components/ArtboardWorkspace";
 import { desktopCatalogGateway, type CatalogGateway, type CatalogListQuery, type TemplateChoice, type VisualDetail, type VisualRow } from "./catalog-gateway";
 import { renderTemplatePreview } from "./template-preview";
@@ -86,6 +88,11 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
     "visual.accent_color": selected.visual.accent_color ?? null,
     "brand.primary_color": "#D40511",
   }) : {}, [selected]);
+
+  async function exportEditorSvg(document: TemplateDocument): Promise<ExportSvgResult> {
+    if (!selected) return { status: "cancelled" };
+    return exportTemplateDocumentAsSvg({ document, values: editorValues, visualName: selected.visual.name }, desktopSvgFilePort);
+  }
 
   async function selectVisual(row: VisualRow) {
     const generation = ++detailGeneration.current;
@@ -250,7 +257,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
 
       <main className="catalog-main" id="catalog">
         <header className="page-header"><h1>{editorOpen ? "Artboard preview" : "Visual catalog"}</h1><button className="button button-primary" onClick={() => { setActionError(null); setDialogMode("create"); }} disabled={!templates.length || busy || editorOpen}>New visual</button></header>
-        {editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
+        {editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onExportSvg={exportEditorSvg} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
           <section className="catalog-list" aria-label="Visual catalog results">
             <form className="search-form" onSubmit={submitSearch}>
               <label className="search-field"><span className="visually-hidden">Search visuals</span><span aria-hidden="true">⌕</span>

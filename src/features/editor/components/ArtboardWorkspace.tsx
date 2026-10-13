@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 
 import { EditorHistory } from "../../../domain/editor-history";
+import type { ExportSvgResult } from "../../../application/export-template-svg";
 import type { EditorCommand, ElementOrder, ResizeHandle } from "../../../domain/editor-commands";
 import type { Element, TemplateDocument } from "../../../domain/template-document";
 import { Artboard } from "./Artboard";
@@ -11,12 +12,13 @@ import { ViewportControls } from "./ViewportControls";
 import { defaultViewport } from "../geometry/viewport";
 import "./editor.css";
 
-export function ArtboardWorkspace({ document, versionNumber, values, onClose, onSaveDraft, saving = false }: {
+export function ArtboardWorkspace({ document, versionNumber, values, onClose, onSaveDraft, onExportSvg, saving = false }: {
   readonly document: TemplateDocument;
   readonly versionNumber: number;
   readonly values: Readonly<Record<string, string | number | boolean | null>>;
   readonly onClose: () => void;
   readonly onSaveDraft: (document: TemplateDocument) => void;
+  readonly onExportSvg?: (document: TemplateDocument) => Promise<ExportSvgResult>;
   readonly saving?: boolean;
 }) {
   const [zoom, setZoom] = useState(1);
@@ -28,6 +30,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
   const [editedDocument, setEditedDocument] = useState(document);
   const [selectedElementId, setSelectedElementId] = useState<string | undefined>();
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const historyRef = useRef<EditorHistory | null>(null);
   if (!historyRef.current) historyRef.current = new EditorHistory(document);
   const viewport = defaultViewport(zoom);
@@ -56,6 +59,20 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
   function requestClose() {
     if (historyRef.current!.canUndo && !window.confirm("Discard unsaved artboard edits and return to the catalog?")) return;
     onClose();
+  }
+
+  async function exportSvg() {
+    if (!onExportSvg) return;
+    setExportNotice("Preparing SVG…");
+    try {
+      const result = await onExportSvg(editedDocument);
+      if (result.status === "cancelled") { setExportNotice(null); return; }
+      if (result.status === "invalid") { setExportNotice(`SVG was not saved: ${result.diagnostics[0] ?? "The document is invalid."}`); return; }
+      const warning = result.diagnostics.length ? ` Preview note: ${result.diagnostics[0]}` : "";
+      setExportNotice(`SVG saved to ${result.path}.${warning}`);
+    } catch (reason) {
+      setExportNotice(`SVG export failed: ${reason instanceof Error ? reason.message : "The file could not be written."}`);
+    }
   }
 
   function onEditorKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -98,6 +115,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
       <div><h2 id="artboard-workspace-title">Template artboard</h2><p>Template version {versionNumber} · local edits are not saved yet; this artboard is not print-ready.</p></div>
       <div className="artboard-workspace-actions">
         <button className="button button-primary" type="button" onClick={() => onSaveDraft(editedDocument)} disabled={saving || !historyRef.current.canUndo}>{saving ? "Saving…" : "Save draft"}</button>
+        <button className="button button-secondary" type="button" onClick={() => void exportSvg()} disabled={saving || !onExportSvg}>Export SVG</button>
         <button className="button button-secondary" type="button" onClick={undo} disabled={!historyRef.current.canUndo}>Undo</button>
         <button className="button button-secondary" type="button" onClick={redo} disabled={!historyRef.current.canRedo}>Redo</button>
         <ViewportControls zoom={zoom} onZoomChange={setZoom} />
@@ -106,6 +124,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
         <button className="button button-secondary" type="button" onClick={requestClose}>Return to catalog</button>
       </div>
     </header>
+    {exportNotice ? <p className={exportNotice.startsWith("SVG export failed") || exportNotice.startsWith("SVG was not saved") ? "inspector-error" : "status-line"} role="status" aria-live="polite">{exportNotice}</p> : null}
     {commandError ? <p className="inspector-error" role="alert">{commandError}</p> : null}
     <div className="editor-workspace-body" onKeyDown={onEditorKeyDown}>
       <div className="artboard-canvas-scroll" aria-label="Scrollable template artboard">

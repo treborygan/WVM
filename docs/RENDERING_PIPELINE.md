@@ -6,6 +6,10 @@
 
 The pipeline is deterministic and consumes immutable domain inputs. The editor preview uses the same RenderScene builder and SVG renderer. It does not serialize browser DOM or capture screenshots.
 
+## Current implementation boundary (release 0.1.8)
+
+`src/rendering/svg-renderer.ts` is a pure, deterministic single-document SVG renderer shared by the catalog preview and the editor's **Export SVG** action. Export validates the canonical document, writes physical millimetre dimensions and viewBox, escapes text/attributes, and returns diagnostics for unavailable images, invalid bound colors, wrap/fit/ellipsis policies. The React artboard still renders its interactive scene separately. This renderer does not yet build the version-pinned `RenderScene`, embed managed assets/fonts, compose print sheets, or produce PDF. Treat the SVG as an editable single-artboard export, not a production print file.
+
 ## Inputs and resolution
 
 The render request identifies exact template and visual version IDs, brand profile revision, asset hashes, output page/sheet rules, and renderer version. Binding resolution accepts only typed allow-listed paths. Literal text remains literal; derived display text is built from structured values. Missing binding, unsupported schema, missing asset, corrupt asset hash, or unavailable font returns a structured diagnostic with entity/element ID and remedy.
