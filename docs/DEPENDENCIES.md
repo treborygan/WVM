@@ -33,6 +33,12 @@ Direct application dependencies and development/test dependencies are listed bel
 
 Transitive packages are resolved and pinned by the committed npm and Cargo lockfiles. Their licence metadata must be reviewed before a release distribution.
 
+## Transitive security update
+
+| Dependency | Locked version | Dependency path | Licence | Security status |
+| --- | --- | --- | --- | --- |
+| `source-map-js` | 1.2.2 | `jsdom → css-tree` and `vite → postcss` | BSD-3-Clause | Updated from vulnerable 1.2.1 to address GHSA-68fv-2mgg-jv7q; `npm audit` reports no known vulnerabilities. |
+
 ## Toolchain-provided dependencies
 
 | Tool | Verified version | Purpose | Licence | Classification |

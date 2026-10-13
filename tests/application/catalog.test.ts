@@ -17,7 +17,16 @@ const version: VisualVersion = {
   created_at: "2026-01-01T00:00:00.000Z",
 };
 const repository: CatalogRepository = {
-  list: async () => visuals.map((visual) => ({ visual, template_family: "gang-standard-2up", legacy_search_text: "synthetic source" })),
+  list: async (query) => ({
+    items: [
+      { visual: visuals[1], template_family: "gang-standard-2up" as const, legacy_search_text: "synthetic source" },
+      { visual: visuals[0], template_family: "gang-standard-2up" as const, legacy_search_text: "synthetic source" },
+    ].slice((query.page - 1) * query.page_size, query.page * query.page_size),
+    page: query.page,
+    page_size: query.page_size,
+    total: 2,
+    total_pages: Math.ceil(2 / query.page_size),
+  }),
   getById: async (id) => visuals.find((visual) => visual.id === id),
   getCurrentVersion: async () => version,
   getSourceReferences: async () => [{ id: createId("legacy_source_reference"), visual_id: visuals[0].id, source_id: "SYN-001", source_name: "synthetic.pptx", migration_batch: "synthetic", validation_state: "pending" }],
@@ -26,10 +35,28 @@ const repository: CatalogRepository = {
 };
 
 describe("catalog use cases", () => {
-  it("searches, filters, sorts, and pages summaries deterministically", async () => {
+  it("projects only the requested repository page into catalog summaries", async () => {
     const page = await listVisuals({ search: "marker", sort_by: "name", sort_order: "asc", page: 1, page_size: 1 }, repository);
     expect(page.items.map(({ name }) => name)).toEqual(["Alpha marker"]);
     expect(page).toMatchObject({ total: 2, page: 1, page_size: 1, total_pages: 2 });
+  });
+
+  it("pushes catalog filters and paging to the repository and preserves its total", async () => {
+    const query = { search: "Alpha", visual_type: "gang", legacy_source: "synthetic source", sort_by: "location" as const, sort_order: "desc" as const, page: 2, page_size: 1 };
+    let received: unknown;
+    const pagedRepository = {
+      ...repository,
+      list: async (...args: unknown[]) => {
+        received = args[0];
+        return { items: [{ visual: visuals[0], template_family: "gang-standard-2up" as const }], page: 2, page_size: 1, total: 3, total_pages: 3 };
+      },
+    } as unknown as CatalogRepository;
+
+    const result = await listVisuals(query, pagedRepository);
+
+    expect(received).toEqual(query);
+    expect(result).toMatchObject({ page: 2, page_size: 1, total: 3, total_pages: 3 });
+    expect(result.items.map(({ id }) => id)).toEqual([visuals[0].id]);
   });
 
   it("loads details with current version, template family, and provenance", async () => {

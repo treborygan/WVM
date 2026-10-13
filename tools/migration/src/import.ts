@@ -2,7 +2,7 @@ import { createId, parseId } from "../../../src/domain/ids";
 import type { AuditEvent, LegacySourceReference, TemplateFamily, Visual, VisualVersion } from "../../../src/domain/entities";
 import type { MigrationBaseline, MigrationReport } from "./reconcile";
 import { reconcileMigration } from "./reconcile";
-import { mapStagingCatalog, type StagedVisual } from "./staging";
+import { TEMPLATE_FAMILIES, mapStagingCatalog, type StagedVisual } from "./staging";
 
 export interface SelectedTemplate {
   readonly template_id: Visual["template_id"];
@@ -85,6 +85,12 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
   const report = await reconcileMigration(rows, options.baseline);
   if (!report.can_import) throw new MigrationReconciliationError(report);
 
+  for (const family of TEMPLATE_FAMILIES) {
+    if (rows.some((row) => row.template_family === family) && !options.templates[family]) {
+      throw new MigrationTemplateSelectionError(family);
+    }
+  }
+
   const now = options.now ?? (() => new Date().toISOString());
   const newId = options.new_id ?? ((kind) => createId(kind));
   const timestamp = now();
@@ -96,7 +102,7 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
   for (const row of rows) {
     const family = row.template_family as TemplateFamily;
     const template = options.templates[family];
-    if (!template) throw new Error(`No selected template/version mapping exists for ${family}.`);
+    if (!template) throw new MigrationTemplateSelectionError(family);
     const visualId = parseId(row.id, "visual");
     const versionId = parseId(newId("visual_version"), "visual_version");
     const visual: Visual = {
@@ -172,5 +178,14 @@ export class MigrationReconciliationError extends Error {
   constructor(readonly report: MigrationReport) {
     super(`Migration is blocked by ${report.blocking_issues.length} reconciliation issue(s).`);
     this.name = "MigrationReconciliationError";
+  }
+}
+
+export class MigrationTemplateSelectionError extends Error {
+  readonly code = "missing_template_selection" as const;
+
+  constructor(readonly family: TemplateFamily) {
+    super(`Select a template and version for the ${family} family before importing.`);
+    this.name = "MigrationTemplateSelectionError";
   }
 }

@@ -10,6 +10,7 @@ import { importSelectedSources, MigrationReconciliationError, type MigrationImpo
 
 const families: readonly TemplateFamily[] = ["gang-standard-2up", "gang-special-2up", "flow-sticker-12up", "stand-standard-3up", "stand-level-instruction-3up"];
 async function baseline() { return expectedReport; }
+function catalogBytes() { return new TextEncoder().encode(catalogSource.replace(/\r\n/gu, "\n")); }
 function templates() {
   return Object.fromEntries(families.map((family) => [family, { template_id: `template-${family}` as never, template_version_id: `template-version-${family}` as never }])) as Record<TemplateFamily, { template_id: never; template_version_id: never }>;
 }
@@ -21,7 +22,7 @@ describe("private migration import boundary", () => {
     const ids = ((): (() => string) => { let next = 0; return () => `generated-${++next}`; })();
     const batch = await importSelectedSources({
       paths: [selected],
-      reader: { read: async (path) => { expect(path).toBe(selected); return new TextEncoder().encode(catalogSource); } },
+      reader: { read: async (path) => { expect(path).toBe(selected); return catalogBytes(); } },
       baseline: await baseline(), templates: templates(), migration_batch: "synthetic-batch-001",
       now: () => "2026-09-25T12:00:00.000Z", new_id: ids,
       repository: { importAtomically: async (value) => { inserted = value; } },
@@ -37,11 +38,28 @@ describe("private migration import boundary", () => {
     expect(special.every((version) => version.special_validation?.state === "pending" && !version.published_at)).toBe(true);
   });
 
+  it("reports a missing family template selection as a blocking reconciliation diagnostic", async () => {
+    const selectedTemplates = templates() as Partial<Record<TemplateFamily, { template_id: never; template_version_id: never }>>;
+    delete selectedTemplates["gang-special-2up"];
+    await expect(importSelectedSources({
+      paths: ["C:/private/input/catalog.json"],
+      reader: { read: async () => catalogBytes() },
+      baseline: await baseline(),
+      templates: selectedTemplates as Record<TemplateFamily, { template_id: never; template_version_id: never }>,
+      migration_batch: "synthetic-batch-001",
+      repository: { importAtomically: async () => { throw new Error("must not write a partially mapped import"); } },
+    })).rejects.toMatchObject({
+      name: "MigrationTemplateSelectionError",
+      family: "gang-special-2up",
+      code: "missing_template_selection",
+    });
+  });
+
   it("blocks count or hash drift before invoking the transactional repository", async () => {
     let called = false;
     const badBaseline = { ...(await baseline()), total_count: 11 };
     await expect(importSelectedSources({
-      paths: ["C:/private/input/catalog.json"], reader: { read: async () => new TextEncoder().encode(catalogSource) },
+      paths: ["C:/private/input/catalog.json"], reader: { read: async () => catalogBytes() },
       baseline: badBaseline, templates: templates(), migration_batch: "synthetic-batch-001",
       repository: { importAtomically: async () => { called = true; } },
     })).rejects.toBeInstanceOf(MigrationReconciliationError);
