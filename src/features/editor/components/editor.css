@@ -14,7 +14,9 @@
 .grid-controls { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #424950; font-size: 11px; }
 .grid-controls label { display: inline-flex; align-items: center; gap: 4px; }
 .grid-controls select { min-height: 28px; padding: 3px 5px; border: 1px solid #c6cbd0; border-radius: 3px; background: #fff; color: #222; font: inherit; }
+.guide-hint { min-width: 120px; color: #a3114b; font-size: 11px; }
 .artboard-grid { pointer-events: none; }
+.artboard-alignment-guide { stroke: #c2185b; stroke-width: .45; stroke-dasharray: 2 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 .artboard-workspace { min-height: calc(100vh - 120px); background: #f1f3f5; }
 .artboard-workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 22px; border-bottom: 1px solid #cbd0d5; background: #fff; }
 .artboard-workspace-header h2 { margin: 0; font-size: 20px; }

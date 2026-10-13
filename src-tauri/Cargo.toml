@@ -1,6 +1,6 @@
 [package]
 name = "warehouse-visual-manager"
-version = "0.1.2"
+version = "0.1.3"
 description = "Warehouse Visual Manager desktop shell"
 authors = ["Warehouse Visual Manager contributors"]
 edition = "2021"

@@ -20,6 +20,10 @@ const document: TemplateDocument = {
       wrapping: "nowrap", overflow: "clip", fit_policy: "none", color: { kind: "literal", value: "#D40511" } },
   }],
 };
+const documentWithTarget: TemplateDocument = {
+  ...document,
+  elements: [document.elements[0], { ...document.elements[0], id: "target", x_mm: 100, y_mm: 14, width_mm: 50, z_index: 2 }],
+};
 
 describe("Artboard", () => {
   it("renders the canonical document in millimetres at the selected viewport scale", () => {
@@ -112,6 +116,20 @@ describe("Artboard", () => {
     fireEvent.pointerDown(east, { pointerId: 81, button: 0, clientX: 4, clientY: 7 });
     fireEvent.pointerUp(east, { pointerId: 81, clientX: 4 + 8 * pxPerMm, clientY: 7 });
     expect(onResizeElement).toHaveBeenCalledWith("location", "e", 10, 0);
+  });
+
+  it("shows an active alignment guide and snaps a moving edge within three screen pixels", () => {
+    const onMoveElement = vi.fn();
+    const onGuideHint = vi.fn();
+    const pxPerMm = 96 / 25.4;
+    render(<Artboard document={documentWithTarget} viewport={{ zoom: 1, pxPerMm, pan: { x: 0, y: 0 } }} snapToGuides guideTolerancePx={3} onGuideHint={onGuideHint} onMoveElement={onMoveElement} />);
+    const text = screen.getAllByRole("button", { name: "Select text: A-01" })[0];
+    fireEvent.pointerDown(text, { pointerId: 83, button: 0, clientX: 4, clientY: 7 });
+    fireEvent.pointerMove(text, { pointerId: 83, clientX: 4 + 9.5 * pxPerMm, clientY: 7 });
+    expect(screen.getByTestId("alignment-guide-x")).toHaveAttribute("x1", "100");
+    expect(onGuideHint).toHaveBeenCalledWith("Aligned to target left edge and target top edge");
+    fireEvent.pointerUp(text, { pointerId: 83, clientX: 4 + 9.5 * pxPerMm, clientY: 7 });
+    expect(onMoveElement).toHaveBeenCalledWith("location", expect.closeTo(10, 8), 0);
   });
 
   it("draws a visible millimetre grid only when requested", () => {

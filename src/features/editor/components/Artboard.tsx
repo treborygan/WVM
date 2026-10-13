@@ -4,6 +4,7 @@ import { applyEditorCommand, type ResizeHandle } from "../../../domain/editor-co
 import type { Element, TemplateDocument } from "../../../domain/template-document";
 import { isInsidePage } from "../geometry/bounds";
 import { snapMoveDeltas, snapResizeDeltas } from "../geometry/grid";
+import { snapMoveToGuides, snapResizeToGuides, type GuideSnapResult } from "../geometry/guides";
 import { pointsToMillimetres } from "../geometry/units";
 import { screenDeltaToMillimetres, type Viewport } from "../geometry/viewport";
 import "./editor.css";
@@ -18,7 +19,10 @@ export interface ArtboardProps {
   readonly onMoveElement?: (elementId: string, dxMm: number, dyMm: number) => void;
   readonly onResizeElement?: (elementId: string, handle: ResizeHandle, dxMm: number, dyMm: number) => void;
   readonly snapToGrid?: boolean;
+  readonly snapToGuides?: boolean;
   readonly gridStepMm?: number;
+  readonly guideTolerancePx?: number;
+  readonly onGuideHint?: (hint: string | null) => void;
   readonly showGrid?: boolean;
 }
 
@@ -145,6 +149,7 @@ export function Artboard(props: ArtboardProps) {
   const gestureRef = useRef<PointerGesture | null>(null);
   const [previewDocument, setPreviewDocument] = useState<TemplateDocument | null>(null);
   const gestureDocument = previewDocument ?? props.document;
+  const [activeGuides, setActiveGuides] = useState<GuideSnapResult>({ delta: { dx_mm: 0, dy_mm: 0 } });
   const { width_mm, height_mm } = props.document.page;
   const { zoom, pxPerMm, pan } = props.viewport;
   const width = width_mm * pxPerMm * zoom;
@@ -153,15 +158,24 @@ export function Artboard(props: ArtboardProps) {
   function commandFor(gesture: PointerGesture, clientX: number, clientY: number) {
     const physicalDelta = screenDeltaToMillimetres({ x: clientX - gesture.startX, y: clientY - gesture.startY }, props.viewport);
     let delta = { dx_mm: physicalDelta.x, dy_mm: physicalDelta.y };
+    let guides: GuideSnapResult = { delta };
     if (props.snapToGrid && (delta.dx_mm !== 0 || delta.dy_mm !== 0)) {
       const element = props.document.elements.find((item) => item.id === gesture.elementId);
       if (element) delta = gesture.handle
         ? snapResizeDeltas(element, gesture.handle, delta, props.gridStepMm ?? 1)
         : snapMoveDeltas(element, delta, props.gridStepMm ?? 1);
     }
-    return gesture.handle
+    if (props.snapToGuides && (delta.dx_mm !== 0 || delta.dy_mm !== 0)) {
+      const toleranceMm = (props.guideTolerancePx ?? 3) / (props.viewport.pxPerMm * props.viewport.zoom);
+      guides = gesture.handle
+        ? snapResizeToGuides(props.document, gesture.elementId, gesture.handle, delta, toleranceMm)
+        : snapMoveToGuides(props.document, gesture.elementId, delta, toleranceMm);
+      delta = guides.delta;
+    }
+    const command = gesture.handle
       ? { type: "resize_element" as const, element_id: gesture.elementId, handle: gesture.handle, dx_mm: delta.dx_mm, dy_mm: delta.dy_mm, minimum_mm: 1 }
       : { type: "move_element" as const, element_id: gesture.elementId, dx_mm: delta.dx_mm, dy_mm: delta.dy_mm };
+    return { command, guides };
   }
   function beginGesture(event: PointerEvent<SVGGElement>) {
     const source = event.target;
@@ -176,31 +190,39 @@ export function Artboard(props: ArtboardProps) {
   function moveGesture(event: PointerEvent<SVGGElement>) {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    try { setPreviewDocument(applyEditorCommand(props.document, commandFor(gesture, event.clientX, event.clientY))); }
+    const result = commandFor(gesture, event.clientX, event.clientY);
+    setActiveGuides(result.guides);
+    const targets = [result.guides.xGuide?.target, result.guides.yGuide?.target].filter((target): target is string => Boolean(target));
+    props.onGuideHint?.(targets.length ? `Aligned to ${targets.join(" and ")}` : null);
+    try { setPreviewDocument(applyEditorCommand(props.document, result.command)); }
     catch { /* Invalid transient resize remains at its last valid preview geometry. */ }
   }
   function finishGesture(event: PointerEvent<SVGGElement>) {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    const command = commandFor(gesture, event.clientX, event.clientY);
+    const { command } = commandFor(gesture, event.clientX, event.clientY);
     if (command.dx_mm !== 0 || command.dy_mm !== 0) {
       if (gesture.handle) props.onResizeElement?.(gesture.elementId, gesture.handle, command.dx_mm, command.dy_mm);
       else props.onMoveElement?.(gesture.elementId, command.dx_mm, command.dy_mm);
     }
     gestureRef.current = null;
     setPreviewDocument(null);
+    setActiveGuides({ delta: { dx_mm: 0, dy_mm: 0 } });
+    props.onGuideHint?.(null);
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* Capture may already have been released by the platform. */ }
   }
   const pointerHandlers = {
     onPointerDown: beginGesture,
     onPointerMove: moveGesture,
     onPointerUp: finishGesture,
-    onPointerCancel: () => { gestureRef.current = null; setPreviewDocument(null); },
+    onPointerCancel: () => { gestureRef.current = null; setPreviewDocument(null); setActiveGuides({ delta: { dx_mm: 0, dy_mm: 0 } }); props.onGuideHint?.(null); },
   };
   return <svg className="editor-artboard" role="group" aria-label="Template artboard" width={width} height={height} viewBox={`0 0 ${width_mm} ${height_mm}`} style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, transformOrigin: "top left" }}>
     {props.showGrid ? <defs><pattern id="artboard-grid-pattern" width={props.gridStepMm ?? 1} height={props.gridStepMm ?? 1} patternUnits="userSpaceOnUse"><path d={`M ${props.gridStepMm ?? 1} 0 H 0 V ${props.gridStepMm ?? 1}`} fill="none" stroke="#b6c2cc" strokeWidth="0.18" /></pattern></defs> : null}
     <rect className="artboard-page" x={0} y={0} width={width_mm} height={height_mm} />
     {props.showGrid ? <rect className="artboard-grid" x={0} y={0} width={width_mm} height={height_mm} fill="url(#artboard-grid-pattern)" pointerEvents="none" /> : null}
     {elements.map((element) => renderElement(element, { ...props, document: gestureDocument }, pointerHandlers))}
+    {activeGuides.xGuide ? <line className="artboard-alignment-guide" data-testid="alignment-guide-x" x1={activeGuides.xGuide.position_mm} x2={activeGuides.xGuide.position_mm} y1={0} y2={height_mm}><title>Aligned to {activeGuides.xGuide.target}</title></line> : null}
+    {activeGuides.yGuide ? <line className="artboard-alignment-guide" data-testid="alignment-guide-y" x1={0} x2={width_mm} y1={activeGuides.yGuide.position_mm} y2={activeGuides.yGuide.position_mm}><title>Aligned to {activeGuides.yGuide.target}</title></line> : null}
   </svg>;
 }
