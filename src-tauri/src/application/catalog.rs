@@ -26,6 +26,8 @@ pub struct SaveDraftRequest {
     pub visual_id: String,
     pub expected_revision_id: String,
     pub template_version_id: String,
+    #[serde(default)]
+    pub template_document: Option<Value>,
     pub visual: VisualFields,
     pub values: Value,
     pub notes: Option<String>,

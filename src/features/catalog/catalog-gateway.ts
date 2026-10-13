@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type { TemplateFamily, TemplateVersion, Visual, VisualVersion } from "../../domain/entities";
+import type { TemplateDocument } from "../../domain/template-document";
 
 export type LifecycleAction = "submit_for_review" | "return_to_draft" | "publish" | "retire" | "reactivate";
 
@@ -70,6 +71,7 @@ export interface SaveDraftRequest {
   readonly visual_id: string;
   readonly expected_revision_id: string;
   readonly template_version_id: string;
+  readonly template_document?: TemplateDocument;
   readonly visual: VisualFields;
   readonly values: Readonly<Record<string, string | number | boolean | null>>;
   readonly notes?: string;

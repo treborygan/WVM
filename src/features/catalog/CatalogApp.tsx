@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import type { TemplateFamily } from "../../domain/entities";
+import type { TemplateDocument } from "../../domain/template-document";
+import { ArtboardWorkspace } from "../editor/components/ArtboardWorkspace";
 import { desktopCatalogGateway, type CatalogGateway, type CatalogListQuery, type TemplateChoice, type VisualDetail, type VisualRow } from "./catalog-gateway";
 import { renderTemplatePreview } from "./template-preview";
 import "./catalog.css";
@@ -23,6 +25,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [selected, setSelected] = useState<VisualDetail | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +76,20 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
 
   const chosenTemplate = useMemo(() => templates.find((choice) => choice.template.id === selected?.visual.template_id), [selected?.visual.template_id, templates]);
   const selectedPreview = useMemo(() => selected ? renderTemplatePreview(selected) : null, [selected]);
+  const editorValues = useMemo(() => selected ? ({
+    ...(selected.current_version?.values ?? {}),
+    "visual.name": selected.visual.name,
+    "visual.location": selected.visual.location ?? null,
+    "visual.flow": selected.visual.flow ?? null,
+    "visual.description": selected.visual.description ?? null,
+    "visual.stock_class": selected.visual.stock_class ?? null,
+    "visual.accent_color": selected.visual.accent_color ?? null,
+    "brand.primary_color": "#D40511",
+  }) : {}, [selected]);
 
   async function selectVisual(row: VisualRow) {
     const generation = ++detailGeneration.current;
+    setEditorOpen(false);
     setSelected(null);
     setDetailLoading(true);
     setActionError(null);
@@ -192,6 +206,34 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
     finally { setBusy(false); }
   }
 
+  async function saveTemplateDraft(document: TemplateDocument) {
+    if (!selected?.current_version || !selected.current_template_version) return;
+    setBusy(true); setActionError(null);
+    try {
+      const version = selected.current_version;
+      const detail = await gateway.saveDraft({
+        visual_id: selected.visual.id,
+        expected_revision_id: version.id,
+        template_version_id: selected.current_template_version.id,
+        template_document: document,
+        visual: {
+          name: selected.visual.name,
+          visual_type: selected.visual.visual_type,
+          stock_class: selected.visual.stock_class,
+          location: selected.visual.location,
+          flow: selected.visual.flow,
+          description: selected.visual.description,
+          accent_color: selected.visual.accent_color,
+        },
+        values: version.values,
+        notes: version.notes,
+        special_validation: version.special_validation ? { ...version.special_validation } : undefined,
+      });
+      setEditorOpen(false); await load(query, detail); setNotice("Template edits saved as a new immutable draft version.");
+    } catch (reason) { setActionError(reason instanceof Error ? reason.message : "The template draft could not be saved."); }
+    finally { setBusy(false); }
+  }
+
   const shownDialog = dialogMode;
   return (
     <div className="catalog-shell">
@@ -207,8 +249,8 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
       </aside>
 
       <main className="catalog-main" id="catalog">
-        <header className="page-header"><h1>Visual catalog</h1><button className="button button-primary" onClick={() => { setActionError(null); setDialogMode("create"); }} disabled={!templates.length || busy}>New visual</button></header>
-        <div className="catalog-content">
+        <header className="page-header"><h1>{editorOpen ? "Artboard preview" : "Visual catalog"}</h1><button className="button button-primary" onClick={() => { setActionError(null); setDialogMode("create"); }} disabled={!templates.length || busy || editorOpen}>New visual</button></header>
+        {editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
           <section className="catalog-list" aria-label="Visual catalog results">
             <form className="search-form" onSubmit={submitSearch}>
               <label className="search-field"><span className="visually-hidden">Search visuals</span><span aria-hidden="true">⌕</span>
@@ -251,7 +293,8 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
           {selected ? <aside className="detail-pane" aria-label="Visual details">
             <div className="detail-title"><div><h2>{selected.visual.name}</h2><p>{familyLabels[selected.template_family]}</p></div><span className={`state-label state-${selected.visual.lifecycle_state.toLowerCase()}`}>{selected.visual.lifecycle_state}</span></div>
             <div className="detail-actions"><button className="button button-primary" onClick={() => void duplicateVisual()} disabled={busy}>Duplicate visual</button>
-              {selected.visual.lifecycle_state === "Draft" || selected.visual.lifecycle_state === "Published" ? <button className="button button-secondary" onClick={() => setDialogMode("edit")} disabled={!chosenTemplate || busy}>Edit visual</button> : null}</div>
+              {selected.visual.lifecycle_state === "Draft" || selected.visual.lifecycle_state === "Published" ? <button className="button button-secondary" onClick={() => setDialogMode("edit")} disabled={!chosenTemplate || busy}>Edit visual</button> : null}
+              {selected.current_template_version ? <button className="button button-secondary" onClick={() => setEditorOpen(true)}>Open artboard</button> : null}</div>
             <dl className="detail-fields"><Field label="Type" value={selected.visual.visual_type} /><Field label="Stock class" value={selected.visual.stock_class} /><Field label="Location" value={selected.visual.location} /><Field label="Flow" value={selected.visual.flow} /><Field label="Description" value={selected.visual.description} /><Field label="Accent color" value={selected.visual.accent_color} /></dl>
             <section className="template-preview-section" aria-label="Template preview">
               <div className="template-preview-heading"><h3>Template preview</h3><span>Preview only</span></div>
@@ -270,7 +313,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
             <h2>Select a visual</h2>
             {detailLoading ? <p role="status">Loading visual details</p> : <p>Choose a row to inspect its fields and version history.</p>}
           </aside>}
-        </div>
+        </div>}
       </main>
 
       <dialog ref={dialogRef} aria-labelledby="visual-form-title" onCancel={() => setDialogMode(null)} onClose={() => setDialogMode(null)}>

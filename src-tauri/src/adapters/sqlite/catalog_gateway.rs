@@ -331,11 +331,51 @@ impl<'a> CatalogGateway<'a> {
                         "Visual type does not match its selected template.",
                     ));
                 }
+                let selected_template_version_id = if let Some(document) =
+                    &request.template_document
+                {
+                    let template_versions =
+                        TemplateRepository.list_versions(transaction, &current.template_id)?;
+                    let latest_template_version = template_versions
+                        .last()
+                        .ok_or_else(|| invalid_data("Visual template has no version to edit."))?;
+                    if latest_template_version.id != request.template_version_id {
+                        return Err(invalid_data(
+                            "Template edit is stale; reload the template before saving.",
+                        ));
+                    }
+                    let template_version_id = Uuid::new_v4().to_string();
+                    let template_version = TemplateVersionRecord {
+                        id: template_version_id.clone(),
+                        template_id: current.template_id.clone(),
+                        version_number: latest_template_version.version_number + 1,
+                        document: document.clone(),
+                        created_by: request.actor.clone(),
+                        created_at: now.clone(),
+                        published_at: None,
+                    };
+                    TemplateRepository.add_version(
+                        transaction,
+                        &template_version,
+                        &audit_event(
+                            &Uuid::new_v4().to_string(),
+                            "template_version",
+                            &template_version_id,
+                            Some(&template_version_id),
+                            "template_draft_saved",
+                            &now,
+                            request.actor.clone(),
+                        ),
+                    )?;
+                    template_version_id
+                } else {
+                    request.template_version_id.clone()
+                };
                 let version = VisualVersionRecord {
                     id: new_version_id.clone(),
                     visual_id: current.id.clone(),
                     version_number: latest.version_number + 1,
-                    template_version_id: request.template_version_id.clone(),
+                    template_version_id: selected_template_version_id,
                     values: snapshot_values(&request.values, &request.visual)?,
                     notes: request.notes.clone(),
                     special_validation: if template.family == "gang-special-2up" {
@@ -1286,11 +1326,14 @@ mod tests {
             initial_values["location"].as_str(),
             created.visual.location.as_deref()
         );
+        let mut edited_template_document = linked_template.document.clone();
+        edited_template_document["page"]["width_mm"] = json!(220);
         let saved = gateway
             .save_draft(SaveDraftRequest {
                 visual_id: created.visual.id.clone(),
                 expected_revision_id: initial_revision.clone(),
                 template_version_id: "template-version-gang-standard-2up".to_owned(),
+                template_document: Some(edited_template_document),
                 visual: VisualFields {
                     location: Some("B-02".to_owned()),
                     ..request("gang-standard-2up", "gang").visual
@@ -1302,6 +1345,53 @@ mod tests {
             })
             .expect("draft saves");
         assert_eq!(saved.history.len(), 2);
+        let saved_template = saved
+            .current_template_version
+            .as_ref()
+            .expect("saved template version");
+        assert_eq!(saved_template.version_number, 2);
+        assert_eq!(saved_template.document["page"]["width_mm"], json!(220));
+        assert_ne!(saved_template.id, "template-version-gang-standard-2up");
+        assert_eq!(
+            TemplateRepository
+                .list_versions(
+                    &database.connect().expect("read connection opens"),
+                    "template-gang-standard-2up"
+                )
+                .expect("template history reads")[0]
+                .document["page"]["width_mm"],
+            json!(210),
+            "the original immutable template version remains unchanged"
+        );
+        let stale_template_save = gateway.save_draft(SaveDraftRequest {
+            visual_id: created.visual.id.clone(),
+            expected_revision_id: saved.current_version.as_ref().unwrap().id.clone(),
+            template_version_id: "template-version-gang-standard-2up".to_owned(),
+            template_document: Some(saved_template.document.clone()),
+            visual: request("gang-standard-2up", "gang").visual,
+            values: json!({ "location": "A-01", "flow": "SYN-FLOW-01" }),
+            notes: None,
+            special_validation: None,
+            actor: Some("synthetic-test".to_owned()),
+        });
+        assert!(stale_template_save
+            .unwrap_err()
+            .contains("Template edit is stale"));
+        let unchanged = gateway
+            .detail(&created.visual.id)
+            .expect("current saved version remains");
+        assert_eq!(unchanged.history.len(), 2);
+        assert_eq!(
+            TemplateRepository
+                .list_versions(
+                    &database.connect().expect("read connection opens"),
+                    "template-gang-standard-2up"
+                )
+                .expect("template history reads")
+                .len(),
+            2,
+            "a stale template edit creates neither a template nor visual version"
+        );
         assert_eq!(saved.visual.location.as_deref(), Some("B-02"));
         assert_eq!(
             saved.current_version.as_ref().unwrap().values["name"].as_str(),
@@ -1364,6 +1454,7 @@ mod tests {
             visual_id: created.visual.id.clone(),
             expected_revision_id: current.clone(),
             template_version_id: "template-version-stand-standard-3up".to_owned(),
+            template_document: None,
             visual: request("gang-standard-2up", "gang").visual,
             values: json!({ "location": "A-01" }),
             notes: None,
@@ -1385,6 +1476,7 @@ mod tests {
                 visual_id: created.visual.id.clone(),
                 expected_revision_id: current.clone(),
                 template_version_id: "template-version-gang-standard-2up".to_owned(),
+                template_document: None,
                 visual: VisualFields {
                     location: Some("B-01".to_owned()),
                     ..request("gang-standard-2up", "gang").visual
@@ -1399,6 +1491,7 @@ mod tests {
             visual_id: created.visual.id.clone(),
             expected_revision_id: current,
             template_version_id: "template-version-gang-standard-2up".to_owned(),
+            template_document: None,
             visual: VisualFields {
                 location: Some("C-01".to_owned()),
                 ..request("gang-standard-2up", "gang").visual
@@ -1443,6 +1536,7 @@ mod tests {
             visual_id: created.visual.id.clone(),
             expected_revision_id: initial_revision.clone(),
             template_version_id: "template-version-gang-standard-2up".to_owned(),
+            template_document: None,
             visual: request("gang-standard-2up", "gang").visual,
             values: conflicting_save_values,
             notes: None,
@@ -1723,6 +1817,7 @@ mod tests {
         let validated = gateway.save_draft(SaveDraftRequest {
             visual_id: created.visual.id.clone(), expected_revision_id: first_revision,
             template_version_id: "template-version-gang-special-2up".to_owned(),
+            template_document: None,
             visual: request("gang-special-2up", "gang").visual,
             values: json!({ "location": "A-01", "flow": "SYN-FLOW-01" }), notes: None,
             special_validation: Some(json!({

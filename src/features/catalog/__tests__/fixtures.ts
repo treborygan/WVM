@@ -64,7 +64,9 @@ export function syntheticCatalog(): CatalogGateway {
   });
   const saveDraft = vi.fn(async (request: import("../catalog-gateway").SaveDraftRequest): Promise<VisualDetail> => {
     const savedVersion = { ...initial.history[1], id: parseId("version-3", "visual_version"), visual_id: parseId(request.visual_id, "visual"), version_number: 3, values: request.values, published_at: undefined };
-    current = { ...current, visual: { ...current.visual, ...request.visual, lifecycle_state: "Draft", current_draft_version_id: savedVersion.id }, current_version: savedVersion, history: [...current.history, savedVersion] };
+    current = { ...current, visual: { ...current.visual, ...request.visual, lifecycle_state: "Draft", current_draft_version_id: savedVersion.id }, current_version: savedVersion,
+      current_template_version: request.template_document ? { ...current.current_template_version!, id: parseId("template-version-2", "template_version"), version_number: current.current_template_version!.version_number + 1, document: request.template_document } : current.current_template_version,
+      history: [...current.history, savedVersion] };
     rows = rows.map((row) => row.id === current.visual.id ? makeRow(current) : row);
     return current;
   });

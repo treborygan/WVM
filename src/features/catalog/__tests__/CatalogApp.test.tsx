@@ -26,6 +26,12 @@ describe("CatalogApp", () => {
     expect(screen.getByRole("heading", { name: "Template preview" })).toBeVisible();
     expect(screen.getByText("Preview only")).toBeVisible();
     expect(screen.getByRole("img", { name: "Aisle marker A-01 template preview" })).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
+    fireEvent.click(screen.getByRole("button", { name: "Open artboard" }));
+    expect(screen.getByRole("heading", { name: "Template artboard" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "400%" }));
+    expect(screen.getByText("400% zoom")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Return to catalog" }));
+    expect(screen.getByRole("heading", { name: "Template preview" })).toBeVisible();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search visuals" }), { target: { value: "B-02" } });
     fireEvent.submit(screen.getByRole("searchbox", { name: "Search visuals" }).closest("form")!);
@@ -181,5 +187,38 @@ describe("CatalogApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
     await waitFor(() => expect(gateway.transition).toHaveBeenCalledWith(expect.objectContaining({ action: "submit_for_review", expected_state: "Draft" })));
     expect(screen.getByText("Published version 2 remains immutable.")).toBeVisible();
+  });
+
+  it("saves artboard edits as a new immutable template and visual draft version", async () => {
+    render(<CatalogApp gateway={gateway} />);
+    fireEvent.click(await screen.findByRole("row", { name: /Aisle marker A-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open artboard" }));
+    const element = await screen.findByRole("button", { name: "Select text: A-01" });
+    fireEvent.keyDown(element, { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(gateway.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      visual_id: "visual-1",
+      expected_revision_id: "version-2",
+      template_version_id: "template-version-1",
+      template_document: expect.objectContaining({
+        elements: expect.arrayContaining([expect.objectContaining({ id: "location-label", x_mm: 11 })]),
+      }),
+    })));
+    expect(await screen.findByText("Template edits saved as a new immutable draft version.")).toBeVisible();
+  });
+
+  it("asks before discarding unsaved artboard edits", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<CatalogApp gateway={gateway} />);
+    fireEvent.click(await screen.findByRole("row", { name: /Aisle marker A-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open artboard" }));
+    fireEvent.keyDown(await screen.findByRole("button", { name: "Select text: A-01" }), { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("button", { name: "Return to catalog" }));
+    expect(confirm).toHaveBeenCalledWith("Discard unsaved artboard edits and return to the catalog?");
+    expect(screen.getByRole("heading", { name: "Template artboard" })).toBeVisible();
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Return to catalog" }));
+    expect(await screen.findByRole("heading", { name: "Visual catalog" })).toBeVisible();
+    confirm.mockRestore();
   });
 });

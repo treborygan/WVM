@@ -132,19 +132,19 @@
 - Consumes: `TemplateDocument` and `Element` from Task 2.
 - Produces: `mmToScreen(point, viewport): ScreenPoint`, `screenToMm(point, viewport): MmPoint`, `getElementBounds(element): BoundsMm`, and an SVG artboard rendering canonical physical geometry.
 
-- [ ] **Step 1: Write failing tests** for mm↔screen round trip, 1 pt→mm font conversion, page aspect ratio, page bounds, and equivalent physical delta at 25%, 100%, and 400% zoom.
-- [ ] **Step 2: Run `npm run test -- src/features/editor/geometry`;** expect failures before transform helpers exist.
-- [ ] **Step 3: Implement unit/viewport transforms** with top-left origin, explicit CSS px/mm conversion, zoom, and pan.
-- [ ] **Step 4: Render a minimal SVG artboard** with exact mm width/height/viewBox and zoom controls; do not add drag editing in this task.
-- [ ] **Step 5: Run focused tests, `npm run typecheck`, and `npm run build`;** expect geometry and artboard tests to pass.
-- [ ] **Step 6: Verify no screen pixel value is written into the canonical document.**
+- [x] **Step 1: Write failing tests** for mm↔screen round trip, 1 pt→mm font conversion, page aspect ratio, page bounds, and equivalent physical delta at 25%, 100%, and 400% zoom.
+- [x] **Step 2: Run `npm run test -- src/features/editor/geometry`;** verified failures before geometry helpers existed.
+- [x] **Step 3: Implement unit/viewport transforms** with top-left origin, explicit CSS px/mm conversion, zoom, and pan.
+- [x] **Step 4: Render an SVG artboard** with exact mm viewBox, zoom controls, and accessible selection, reachable from selected catalog records.
+- [x] **Step 5: Run focused tests, `npm run typecheck`, and `npm run build`;** expect geometry and artboard tests to pass.
+- [x] **Step 6: Verify no screen pixel value is written into the canonical document.**
 - [ ] **Step 7: Commit** as `feat(editor): add mm viewport and artboard`.
 
 ## Task 6: Add selection, manipulation, inspector, and edit history
 
 **Files:**
 - Create: `src/domain/editor-commands.ts`, `src/domain/editor-history.ts`
-- Create: `src/features/editor/components/SelectionOverlay.tsx`, `src/features/editor/components/Inspector.tsx`, `src/features/editor/components/LayersPanel.tsx`
+- Create: `src/features/editor/components/ArtboardWorkspace.tsx`, `src/features/editor/components/Inspector.tsx`, `src/features/editor/components/LayersPanel.tsx`
 - Create: `src/features/editor/__tests__/manipulation.test.ts`, `src/domain/__tests__/editor-history.test.ts`, `tests/features/editor/Inspector.test.tsx`
 
 **Interfaces:**
@@ -153,9 +153,9 @@
 
 - [ ] **Step 1: Write failing tests** for zoom-independent drag/resize at 25/100/400%, anchor preservation, snap tolerance, positive dimensions, locked/hidden behavior, numeric edits, z-order, visibility, and deterministic undo/redo.
 - [ ] **Step 2: Run `npm run test -- src/features/editor/__tests__ src/domain/__tests__/editor-history.test.ts`;** expect failures before commands/history are implemented.
-- [ ] **Step 3: Implement immutable commands** with validation and one history entry per committed gesture/inspector apply; prohibit DOM snapshots.
+- [x] **Step 3: Implement immutable commands** with validation and one history entry per committed gesture/inspector apply; prohibit DOM snapshots.
 - [ ] **Step 4: Implement selection handles, grid/guides, pointer drag/resize, and exact inspector controls** with keyboard equivalents and focus cues.
-- [ ] **Step 5: Implement LayersPanel** with front/back and one-step ordering, visibility, and lock controls.
+- [x] **Step 5: Implement LayersPanel** with front/back and one-step ordering, visibility, and lock controls.
 - [ ] **Step 6: Run focused tests, `npm run typecheck`, `npm run test`, and `npm run build`;** expect all editor checks to pass.
 - [ ] **Step 7: Commit** as `feat(editor): add geometry editing and history`.
 
@@ -240,6 +240,10 @@
 - [ ] **Step 8: Commit** as `feat(release): complete WVM V1 acceptance and packaging`.
 
 ## Execution notes
+
+### Editable preview checkpoint (2026-10-14)
+
+The editor checkpoint implements SVG selection, move/resize, physical numeric geometry, page dimensions, layers, visibility/lock, z-order, and undo/redo. Closing with unsaved edits asks before discarding them. Saving a changed document writes a new immutable TemplateVersion and linked VisualVersion inside one SQLite transaction; stale template version saves are rejected. Verification at this checkpoint: 153 frontend tests, 37 Rust tests, production build, and `cargo fmt --check` pass. Task 6 remains open for grid/guides/snapping, fuller authoring controls, and the remaining acceptance coverage. Tasks 7–10 remain open; this checkpoint is not the completed V1 release.
 
 - The ten tasks replace the original 22-phase outline by grouping work with shared contracts while preserving review gates between domain/storage, catalog/migration, editor geometry/operations, authoring/lifecycle, SVG/sheet rendering, PDF/print, and release/acceptance.
 - Do not start Task 1 implementation until the foundation documentation is approved.

@@ -1,0 +1,46 @@
+.editor-artboard { display: block; overflow: visible; background: #f1f3f5; box-shadow: 0 2px 14px #13192030; touch-action: none; user-select: none; }
+.artboard-page { fill: #fff; stroke: #69717a; stroke-width: .25; vector-effect: non-scaling-stroke; }
+.artboard-element { cursor: pointer; outline: none; }
+.artboard-element:focus-visible .artboard-selection-outline, .artboard-element.is-selected .artboard-selection-outline { fill: #1570b50c; stroke: #1767a5; stroke-width: .5; stroke-dasharray: 2 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.artboard-element.is-out-of-page { opacity: .65; }
+.artboard-element.is-out-of-page > * { stroke: #c62828; }
+.artboard-element.is-locked { cursor: default; }
+.resize-handle { fill: #fff; stroke: #1767a5; stroke-width: .5; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
+.resize-n, .resize-s { cursor: ns-resize; }
+.resize-e, .resize-w { cursor: ew-resize; }
+.resize-ne, .resize-sw { cursor: nesw-resize; }
+.viewport-controls { display: inline-flex; align-items: center; gap: 5px; }
+.viewport-controls output { min-width: 64px; color: #555d65; font-size: 12px; text-align: right; }
+.artboard-workspace { min-height: calc(100vh - 120px); background: #f1f3f5; }
+.artboard-workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 22px; border-bottom: 1px solid #cbd0d5; background: #fff; }
+.artboard-workspace-header h2 { margin: 0; font-size: 20px; }
+.artboard-workspace-header p { margin: 5px 0 0; color: #5c6268; font-size: 12px; }
+.artboard-workspace-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.artboard-canvas-scroll { display: flex; min-height: calc(100vh - 210px); align-items: flex-start; justify-content: center; overflow: auto; padding: 28px; }
+.editor-workspace-body { display: grid; grid-template-columns: minmax(0, 1fr) 230px 250px; min-height: calc(100vh - 190px); }
+.editor-workspace-panels { display: grid; align-content: start; gap: 14px; padding: 14px; border-left: 1px solid #d6dade; background: #fff; }
+.layers-panel h3, .inspector-section h3 { margin: 0 0 8px; font-size: 14px; }
+.layers-panel ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.layers-panel li { padding: 8px; border: 1px solid #dfe2e5; border-radius: 4px; }
+.layers-panel li.is-selected { border-color: #1767a5; background: #eef6fc; }
+.layer-select { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 6px; padding: 2px; border: 0; background: transparent; color: #252a2f; text-align: left; cursor: pointer; }
+.layer-select span { color: #60676f; font-size: 11px; }
+.layer-select strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; }
+.layer-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.layer-actions button { padding: 4px 6px; border: 1px solid #d4d8dc; border-radius: 3px; background: #fff; color: #30363c; font-size: 10px; cursor: pointer; }
+.editor-inspector { display: grid; align-content: start; gap: 12px; padding: 14px; border-left: 1px solid #d6dade; background: #fff; }
+.inspector-section { display: grid; align-content: start; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid #e4e7ea; }
+.inspector-section label { display: grid; gap: 4px; color: #515960; font-size: 11px; }
+.inspector-section input, .inspector-section select { min-width: 0; width: 100%; min-height: 32px; padding: 5px 7px; border: 1px solid #c6cbd0; border-radius: 3px; background: #fff; color: #222; font: inherit; }
+.inspector-element-name { margin: 0; overflow-wrap: anywhere; color: #333; font-size: 12px; font-weight: 650; }
+.inspector-error { margin: 0; padding: 8px; border-left: 3px solid #b42318; background: #fff1f0; color: #822018; font-size: 11px; }
+@media (max-width: 1100px) { .editor-workspace-body { grid-template-columns: minmax(0, 1fr) 220px; } .layers-panel { grid-column: 1 / -1; grid-row: 2; } }
+@media (max-width: 780px) {
+  .artboard-workspace-header { align-items: flex-start; flex-direction: column; }
+  .artboard-workspace-actions { width: 100%; justify-content: space-between; }
+  .artboard-canvas-scroll { justify-content: flex-start; padding: 14px; }
+  .editor-workspace-body { grid-template-columns: minmax(0, 1fr); }
+  .editor-workspace-panels, .editor-inspector { grid-column: 1; border-left: 0; border-top: 1px solid #d6dade; }
+  .editor-inspector { grid-row: 2; }
+  .layers-panel { grid-row: 3; }
+}

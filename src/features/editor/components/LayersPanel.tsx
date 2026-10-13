@@ -1,0 +1,30 @@
+import type { Element } from "../../../domain/template-document";
+import type { ElementOrder } from "../../../domain/editor-commands";
+import "./editor.css";
+
+export function LayersPanel({ elements, selectedElementId, onSelectElement, onToggleVisibility, onToggleLock, onReorder }: {
+  readonly elements: readonly Element[];
+  readonly selectedElementId?: string;
+  readonly onSelectElement: (id: string) => void;
+  readonly onToggleVisibility: (id: string, visible: boolean) => void;
+  readonly onToggleLock: (id: string, locked: boolean) => void;
+  readonly onReorder: (id: string, position: ElementOrder) => void;
+}) {
+  const ordered = [...elements].sort((a, b) => b.z_index - a.z_index || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  return <section className="layers-panel" aria-label="Layers">
+    <h3>Layers</h3>
+    {ordered.length ? <ol>
+      {ordered.map((element) => <li key={element.id} className={selectedElementId === element.id ? "is-selected" : ""}>
+        <button className="layer-select" type="button" onClick={() => onSelectElement(element.id)} aria-label={`Select layer ${element.id}`} aria-current={selectedElementId === element.id ? "true" : undefined}>
+          <span>{element.type}</span><strong>{element.id}</strong>
+        </button>
+        <div className="layer-actions">
+          <button type="button" aria-label={`${element.visible ? "Hide" : "Show"} ${element.id}`} aria-pressed={!element.visible} onClick={() => onToggleVisibility(element.id, !element.visible)}>{element.visible ? "Hide" : "Show"}</button>
+          <button type="button" aria-label={`${element.locked ? "Unlock" : "Lock"} ${element.id}`} aria-pressed={element.locked} onClick={() => onToggleLock(element.id, !element.locked)}>{element.locked ? "Unlock" : "Lock"}</button>
+          <button type="button" aria-label={`Move ${element.id} to front`} onClick={() => onReorder(element.id, "front")}>Front</button>
+          <button type="button" aria-label={`Move ${element.id} to back`} onClick={() => onReorder(element.id, "back")}>Back</button>
+        </div>
+      </li>)}
+    </ol> : <p>No elements in this template.</p>}
+  </section>;
+}

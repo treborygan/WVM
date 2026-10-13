@@ -12,9 +12,9 @@ Warehouse Visual Manager replaces editable PowerPoint and Excel files as the wor
 
 ## Current usable release
 
-The Windows desktop catalog release provides a local SQLite-backed catalog with search, filters, sorting, paging, record creation/editing/duplication, immutable version history, lifecycle transitions, and a publication gate for special Gang records. It includes synthetic examples for five template families and a preview-only rendering of the exact immutable template version linked to each visual version. The preview supports text, basic shapes, and lines; it is not print-ready and reports unsupported layout features. Data is stored under Windows local application data, and the branded local MSI build uses the supplied DHL logo and Desktop Delivery fonts after manifest hash checks.
+The Windows desktop preview release provides a local SQLite-backed catalog with search, filters, sorting, paging, record creation/editing/duplication, immutable version history, lifecycle transitions, and a publication gate for special Gang records. It includes synthetic examples for five template families and an SVG canvas editor with millimetre geometry, zoom, pointer move/resize, numeric inspector, layers, and undo/redo. Saving creates a new immutable template version and linked visual draft version atomically. The catalog and editor previews support text, basic shapes, and lines; they are not print-ready and report unsupported layout features. Data is stored under Windows local application data, and the branded local MSI build uses the supplied DHL logo and Desktop Delivery fonts after manifest hash checks.
 
-The millimetre canvas editor, deterministic SVG/PDF generation, print handoff, private legacy import UI, and verified backup/restore are still planned. This release is a usable catalog foundation, not a completed V1 production sign-authoring workflow. No real warehouse data is included; the local QA catalog contains synthetic examples only.
+Deterministic sheet rendering/PDF output, print handoff, rich style and asset authoring, private legacy import UI, and verified backup/restore remain planned. This is an editable local preview release, not a completed V1 production sign-authoring workflow. No real warehouse data is included; the local QA catalog contains synthetic examples only.
 
 ## Development
 
