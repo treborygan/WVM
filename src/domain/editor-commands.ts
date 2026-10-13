@@ -12,7 +12,9 @@ export type EditorCommand =
   | { readonly type: "set_element_visible"; readonly element_id: string; readonly visible: boolean }
   | { readonly type: "set_element_locked"; readonly element_id: string; readonly locked: boolean }
   | { readonly type: "set_text_authoring"; readonly element_id: string; readonly value?: string; readonly font_size_pt: number; readonly font_weight: TextStyle["font_weight"]; readonly color?: string }
-  | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: string };
+  | { readonly type: "set_shape_fill"; readonly element_id: string; readonly color: string }
+  | { readonly type: "add_element"; readonly element: Element }
+  | { readonly type: "remove_element"; readonly element_id: string };
 
 function finite(...values: number[]) {
   if (values.some((value) => !Number.isFinite(value))) throw new RangeError("Editor values must be finite.");
@@ -128,5 +130,18 @@ export function applyEditorCommand(document: TemplateDocument, command: EditorCo
         if (element.type !== "rectangle" && element.type !== "band" && element.type !== "background") throw new Error(`Element ${element.id} does not support a shape fill.`);
         return { ...element, style: { ...element.style, fill: { kind: "literal", value: command.color } } };
       });
+    case "add_element": {
+      if (!command.element.id.trim()) throw new Error("Element ID cannot be empty.");
+      if (document.elements.some((element) => element.id === command.element.id)) throw new Error(`Element ID already exists: ${command.element.id}`);
+      validateGeometry(command.element);
+      const z_index = document.elements.reduce((highest, element) => Math.max(highest, element.z_index), -1) + 1;
+      finite(z_index);
+      return { ...document, elements: [...document.elements, { ...command.element, z_index }] };
+    }
+    case "remove_element": {
+      const element = document.elements[indexOfElement(document.elements, command.element_id)]!;
+      if (element.locked) throw new Error(`Element ${command.element_id} is locked.`);
+      return { ...document, elements: document.elements.filter((item) => item.id !== command.element_id) };
+    }
   }
 }

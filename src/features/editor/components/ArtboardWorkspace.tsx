@@ -2,7 +2,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 
 import { EditorHistory } from "../../../domain/editor-history";
 import type { EditorCommand, ElementOrder, ResizeHandle } from "../../../domain/editor-commands";
-import type { TemplateDocument } from "../../../domain/template-document";
+import type { Element, TemplateDocument } from "../../../domain/template-document";
 import { Artboard } from "./Artboard";
 import { GridControls } from "./GridControls";
 import { Inspector } from "./Inspector";
@@ -73,6 +73,26 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
   function changeLock(id: string, locked: boolean) { run({ type: "set_element_locked", element_id: id, locked }); }
   function reorder(id: string, position: ElementOrder) { run({ type: "reorder_element", element_id: id, position }); }
 
+  function addElement(type: "text" | "rectangle" | "line") {
+    const id = `${type}-${crypto.randomUUID()}`;
+    const offset = 10 + (editedDocument.elements.length % 12) * 4;
+    const base = { id, x_mm: offset, y_mm: offset, width_mm: type === "rectangle" ? 45 : 80, height_mm: type === "line" ? 1 : type === "rectangle" ? 30 : 18, rotation_degrees: 0, z_index: 0, visible: true, locked: false };
+    const color = type === "text" ? editedDocument.defaults.text_color ?? "#000000" : type === "rectangle" ? editedDocument.defaults.fill_color ?? "#ffffff" : "#000000";
+    const element: Element = type === "text" ? {
+      ...base, type, content: { kind: "literal", value: "New text" },
+      style: { font_family: editedDocument.defaults.font_family ?? "Arial", font_size_pt: 18, font_weight: "bold", font_style: "normal", horizontal_align: "left", vertical_align: "middle", line_height: 1, wrapping: "nowrap", overflow: "clip", fit_policy: "none", color: { kind: "literal", value: color } },
+    } : type === "rectangle" ? {
+      ...base, type, style: { fill: { kind: "literal", value: color }, stroke: null, stroke_width_mm: 0 },
+    } : { ...base, type, style: { stroke: { kind: "literal", value: color }, stroke_width_mm: 0.4 } };
+    run({ type: "add_element", element });
+    setSelectedElementId(id);
+  }
+
+  function deleteElement(id: string) {
+    run({ type: "remove_element", element_id: id });
+    setSelectedElementId(undefined);
+  }
+
   return <section className="artboard-workspace" aria-labelledby="artboard-workspace-title">
     <header className="artboard-workspace-header" onKeyDown={onEditorKeyDown}>
       <div><h2 id="artboard-workspace-title">Template artboard</h2><p>Template version {versionNumber} · local edits are not saved yet; this artboard is not print-ready.</p></div>
@@ -97,7 +117,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
       </div>
       <div className="editor-workspace-panels">
         <LayersPanel elements={editedDocument.elements} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId}
-          onToggleVisibility={changeVisibility} onToggleLock={changeLock} onReorder={reorder} />
+          onToggleVisibility={changeVisibility} onToggleLock={changeLock} onReorder={reorder} onAddElement={addElement} onDeleteElement={deleteElement} />
       </div>
       <Inspector element={selectedElement} page={editedDocument.page}
         onApplyGeometry={(element_id, geometry) => run({ type: "set_element_geometry", element_id, geometry })}

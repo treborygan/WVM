@@ -16,7 +16,7 @@ describe("LayersPanel", () => {
     const onToggleVisibility = vi.fn();
     const onToggleLock = vi.fn();
     const onReorder = vi.fn();
-    render(<LayersPanel elements={elements} selectedElementId="front" onSelectElement={onSelectElement} onToggleVisibility={onToggleVisibility} onToggleLock={onToggleLock} onReorder={onReorder} />);
+    render(<LayersPanel elements={elements} selectedElementId="front" onSelectElement={onSelectElement} onToggleVisibility={onToggleVisibility} onToggleLock={onToggleLock} onReorder={onReorder} onAddElement={vi.fn()} onDeleteElement={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Select layer back" }));
     fireEvent.click(screen.getByRole("button", { name: "Hide back" }));
@@ -27,5 +27,22 @@ describe("LayersPanel", () => {
     expect(onToggleVisibility).toHaveBeenCalledWith("back", false);
     expect(onToggleLock).toHaveBeenCalledWith("front", false);
     expect(onReorder).toHaveBeenCalledWith("back", "front");
+  });
+
+  it("adds supported element types and deletes the selected unlocked element", () => {
+    const onAddElement = vi.fn();
+    const onDeleteElement = vi.fn();
+    render(<LayersPanel elements={elements} selectedElementId="back" onSelectElement={vi.fn()} onToggleVisibility={vi.fn()} onToggleLock={vi.fn()} onReorder={vi.fn()} onAddElement={onAddElement} onDeleteElement={onDeleteElement} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add rectangle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected element" }));
+    expect(onAddElement).toHaveBeenNthCalledWith(1, "text");
+    expect(onAddElement).toHaveBeenNthCalledWith(2, "rectangle");
+    expect(onDeleteElement).toHaveBeenCalledWith("back");
+  });
+
+  it("keeps a locked selected element from being deleted", () => {
+    render(<LayersPanel elements={elements} selectedElementId="front" onSelectElement={vi.fn()} onToggleVisibility={vi.fn()} onToggleLock={vi.fn()} onReorder={vi.fn()} onAddElement={vi.fn()} onDeleteElement={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Delete selected element" })).toBeDisabled();
   });
 });

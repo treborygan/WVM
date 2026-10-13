@@ -26,6 +26,9 @@
 .editor-workspace-body { display: grid; grid-template-columns: minmax(0, 1fr) 230px 250px; min-height: calc(100vh - 190px); }
 .editor-workspace-panels { display: grid; align-content: start; gap: 14px; padding: 14px; border-left: 1px solid #d6dade; background: #fff; }
 .layers-panel h3, .inspector-section h3 { margin: 0 0 8px; font-size: 14px; }
+.element-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.element-actions button { padding: 5px 7px; border: 1px solid #d4d8dc; border-radius: 3px; background: #fff; color: #30363c; font-size: 10px; cursor: pointer; }
+.element-actions button:disabled { opacity: .5; cursor: not-allowed; }
 .layers-panel ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .layers-panel li { padding: 8px; border: 1px solid #dfe2e5; border-radius: 4px; }
 .layers-panel li.is-selected { border-color: #1767a5; background: #eef6fc; }

@@ -26,6 +26,23 @@ describe("editor style commands", () => {
     expect(updated.elements[1]).toMatchObject({ style: { fill: { kind: "literal", value: "#ffcc00" }, stroke: null } });
   });
 
+  it("adds a new element above the existing paint order and rejects duplicate IDs", () => {
+    const element = { ...document.elements[1]!, id: "new-panel", z_index: -20 };
+    const updated = applyEditorCommand(document, { type: "add_element", element });
+    expect(updated.elements).toHaveLength(3);
+    expect(updated.elements[2]).toMatchObject({ id: "new-panel", z_index: 2 });
+    expect(document.elements).toHaveLength(2);
+    expect(() => applyEditorCommand(document, { type: "add_element", element: { ...element, id: "panel" } })).toThrow(/already exists/i);
+  });
+
+  it("removes an unlocked element and makes the command undoable from its prior document", () => {
+    const updated = applyEditorCommand(document, { type: "remove_element", element_id: "label" });
+    expect(updated.elements.map((item) => item.id)).toEqual(["panel"]);
+    expect(document.elements.map((item) => item.id)).toEqual(["label", "panel"]);
+    const locked = { ...document, elements: document.elements.map((item) => item.id === "label" ? { ...item, locked: true } : item) };
+    expect(() => applyEditorCommand(locked, { type: "remove_element", element_id: "label" })).toThrow(/locked/i);
+  });
+
   it("rejects invalid font sizes and colors", () => {
     expect(() => applyEditorCommand(document, { type: "set_text_authoring", element_id: "label", font_size_pt: 0, font_weight: "bold" })).toThrow(/font size/i);
     expect(() => applyEditorCommand(document, { type: "set_shape_fill", element_id: "panel", color: "red" })).toThrow(/hexadecimal color/i);
