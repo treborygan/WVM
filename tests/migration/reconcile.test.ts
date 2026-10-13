@@ -76,4 +76,33 @@ describe("synthetic migration reconciliation", () => {
     expect(row.fields).toEqual({});
     expect(row.row_issues).toContain("row 1: malformed field value at location");
   });
+
+  it("blocks field keys that collide after whitespace normalization", async () => {
+    const malformed = {
+      schema_version: 1,
+      records: [{
+        id: "WVM-SYN-COLLISION", name: "Synthetic collision", visual_type: "gang",
+        template_family: "gang-standard-2up", fields: { " location": "A-01", "location ": "B-02" },
+        source: { source_id: "SYN-COLLISION", source_name: "synthetic-input.json" },
+      }],
+    };
+    const [row] = mapStagingCatalog(malformed, "synthetic-collision-batch");
+    expect(row.fields).toEqual({ location: "A-01" });
+    expect(row.row_issues).toContain("row 1: field key collision after normalization at location");
+    const report = await reconcileMigration([row], { ...expectedReport, total_count: 1, record_ids: [row.id], record_hashes: { [row.id]: await hashStagedVisual(row) } });
+    expect(report.blocking_issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "field_key_collision" })]));
+  });
+
+  it("preserves raw source text byte-for-byte through staging", () => {
+    const raw = "  source text\r\nwith original spacing  ";
+    const [row] = mapStagingCatalog({
+      schema_version: 1,
+      records: [{
+        id: "WVM-SYN-RAW", name: "Synthetic raw provenance", visual_type: "gang",
+        template_family: "gang-standard-2up", fields: {},
+        source: { source_id: "SYN-RAW", source_name: "synthetic-input.json", raw_source_text: raw },
+      }],
+    }, "synthetic-raw-batch");
+    expect(row.source.raw_source_text).toBe(raw);
+  });
 });

@@ -8,8 +8,8 @@ import { listVisuals } from "../../src/application/catalog/list-visuals";
 import type { CatalogRepository } from "../../src/application/catalog/ports";
 
 const visuals: Visual[] = [
-  { id: "WVM-SYN-002" as Visual["id"], name: "Beta marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "B-02", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "WVM-SYN-001" as Visual["id"], name: "Alpha marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "A-01", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "WVM-SYN-002" as Visual["id"], name: "Beta marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "B-02", flow: "SYN-FLOW-02", stock_class: "synthetic-stock", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "WVM-SYN-001" as Visual["id"], name: "Alpha marker", visual_type: "gang", template_id: "template-gang" as Visual["template_id"], location: "A-01", flow: "SYN-FLOW-01", stock_class: "synthetic-stock", lifecycle_state: "Draft", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
 ];
 const version: VisualVersion = {
   id: createId("visual_version"), visual_id: visuals[0].id, version_number: 1,
@@ -48,7 +48,7 @@ describe("catalog use cases", () => {
       ...repository,
       list: async (...args: unknown[]) => {
         received = args[0];
-        return { items: [{ visual: visuals[0], template_family: "gang-standard-2up" as const }], page: 2, page_size: 1, total: 3, total_pages: 3 };
+        return { items: [{ visual: visuals[0], template_family: "gang-standard-2up" as const, legacy_search_text: "legacy ref SYN-001" }], page: 2, page_size: 1, total: 3, total_pages: 3 };
       },
     } as unknown as CatalogRepository;
 
@@ -57,6 +57,7 @@ describe("catalog use cases", () => {
     expect(received).toEqual(query);
     expect(result).toMatchObject({ page: 2, page_size: 1, total: 3, total_pages: 3 });
     expect(result.items.map(({ id }) => id)).toEqual([visuals[0].id]);
+    expect(result.items[0].legacy_source).toBe("legacy ref SYN-001");
   });
 
   it("loads details with current version, template family, and provenance", async () => {
@@ -82,6 +83,7 @@ describe("catalog use cases", () => {
   it("resets special Gang validation evidence when duplicating into a new draft", async () => {
     const validatedVersion = {
       ...version,
+      created_by: "original-author",
       values: { location: "B-02" },
       special_validation: { state: "validated" as const, reviewer_id: "reviewer-1", reviewed_at: "2026-01-01T00:00:00.000Z", evidence_ref: "evidence-1" },
     };
@@ -96,5 +98,6 @@ describe("catalog use cases", () => {
       now: () => "2026-01-02T00:00:00.000Z",
     });
     expect(copy.version.special_validation).toEqual({ state: "pending" });
+    expect(copy.version.created_by).toBeUndefined();
   });
 });

@@ -1,12 +1,24 @@
 import { createId, parseId } from "../../../src/domain/ids";
-import type { AuditEvent, LegacySourceReference, TemplateFamily, Visual, VisualVersion } from "../../../src/domain/entities";
+import type { AuditEvent, LegacySourceReference, TemplateFamily, TemplateId, TemplateVersionId, Visual, VisualVersion } from "../../../src/domain/entities";
+import type { TemplateDocument } from "../../../src/domain/template-document";
+import { validateOptionalColorTokens } from "../../../src/domain/validation";
 import type { MigrationBaseline, MigrationReport } from "./reconcile";
 import { reconcileMigration } from "./reconcile";
 import { TEMPLATE_FAMILIES, mapStagingCatalog, type StagedVisual } from "./staging";
 
 export interface SelectedTemplate {
-  readonly template_id: Visual["template_id"];
-  readonly template_version_id: VisualVersion["template_version_id"];
+  readonly template_id: TemplateId;
+  readonly template_version_id: TemplateVersionId;
+}
+
+export interface ResolvedTemplateSelection {
+  readonly template: { readonly id: TemplateId; readonly family: TemplateFamily };
+  readonly version: { readonly id: TemplateVersionId; readonly template_id: TemplateId; readonly document: TemplateDocument };
+}
+
+export interface MigrationTemplateResolver {
+  /** Reads the persisted template and version to verify both identity and family before import. */
+  getSelection(templateId: TemplateId, versionId: TemplateVersionId): Promise<ResolvedTemplateSelection | undefined>;
 }
 
 export interface MigrationImportBatch {
@@ -36,6 +48,7 @@ export interface ImportSelectedSourcesOptions {
   readonly reader: SelectedSourceReader;
   readonly baseline: MigrationBaseline;
   readonly templates: Readonly<Record<TemplateFamily, SelectedTemplate>>;
+  readonly template_resolver: MigrationTemplateResolver;
   readonly repository: MigrationImportRepository;
   readonly migration_batch: string;
   readonly now?: () => string;
@@ -64,12 +77,49 @@ function sourceState(row: StagedVisual): LegacySourceReference["validation_state
   return row.template_family === "gang-special-2up" ? "pending" : row.validation_state;
 }
 
+function requiredVisualBindings(document: TemplateDocument): readonly string[] {
+  const paths = new Set<string>();
+  const add = (binding: { readonly kind: string; readonly path?: string }): void => {
+    if (binding.kind === "binding" && binding.path?.startsWith("visual.")) paths.add(binding.path);
+  };
+  for (const element of document.elements) {
+    if (element.type === "text") {
+      add(element.content);
+      add(element.style.color);
+    } else if (element.type === "rectangle" || element.type === "band" || element.type === "background") {
+      add(element.style.fill);
+      if (element.style.stroke) add(element.style.stroke);
+    } else if (element.type === "line" || element.type === "border") {
+      add(element.style.stroke);
+    }
+  }
+  return [...paths].sort();
+}
+
+function validateRequiredBindings(row: StagedVisual, document: TemplateDocument): StagedVisual {
+  const missing = requiredVisualBindings(document).filter((path) => {
+    const field = path.slice("visual.".length);
+    const value = field === "name" ? row.name : row.fields[field];
+    return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+  });
+  const colorIssues = validateOptionalColorTokens({ accent_color: row.fields.accent_color }, `record ${row.id}`);
+  if (missing.length === 0 && colorIssues.length === 0) return row;
+  return {
+    ...row,
+    row_issues: [
+      ...row.row_issues,
+      ...missing.map((path) => `record ${row.id}: required binding ${path} has no value`),
+      ...colorIssues.map((issue) => `record ${row.id}: invalid color token at ${issue.path}`),
+    ],
+  };
+}
+
 /** Imports only explicitly selected paths; no discovery, writes, or mutation of originals is exposed. */
 export async function importSelectedSources(options: ImportSelectedSourcesOptions): Promise<MigrationImportBatch> {
   if (options.paths.length === 0 || options.paths.some((path) => !path.trim())) {
     throw new Error("Select at least one non-empty source path.");
   }
-  const rows: StagedVisual[] = [];
+  let rows: StagedVisual[] = [];
   const sourceFiles: { path: string; sha256: string; byte_length: number }[] = [];
   for (const path of options.paths) {
     const bytes = await options.reader.read(path);
@@ -82,14 +132,33 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
     rows.push(...mapStagingCatalog(parseCatalog(bytes, path), options.migration_batch));
   }
 
-  const report = await reconcileMigration(rows, options.baseline);
-  if (!report.can_import) throw new MigrationReconciliationError(report);
-
   for (const family of TEMPLATE_FAMILIES) {
     if (rows.some((row) => row.template_family === family) && !options.templates[family]) {
       throw new MigrationTemplateSelectionError(family);
     }
   }
+
+  const selections = new Map<TemplateFamily, ResolvedTemplateSelection>();
+  for (const family of new Set(rows.map(({ template_family }) => template_family as TemplateFamily))) {
+    if (!TEMPLATE_FAMILIES.includes(family)) continue;
+    const selected = options.templates[family];
+    if (!selected) continue;
+    const resolved = await options.template_resolver.getSelection(selected.template_id, selected.template_version_id);
+    if (!resolved || resolved.template.id !== selected.template_id || resolved.version.id !== selected.template_version_id || resolved.version.template_id !== resolved.template.id) {
+      throw new MigrationTemplateSelectionError(family, `Selected template/version for ${family} is missing or mismatched in the catalog.`);
+    }
+    if (resolved.template.family !== family) {
+      throw new MigrationTemplateSelectionError(family, `Selected template family ${resolved.template.family} does not match staged family ${family}.`, "template_family_mismatch");
+    }
+    selections.set(family, resolved);
+  }
+  rows = rows.map((row) => {
+    const selection = selections.get(row.template_family as TemplateFamily);
+    return selection ? validateRequiredBindings(row, selection.version.document) : row;
+  });
+
+  const report = await reconcileMigration(rows, options.baseline);
+  if (!report.can_import) throw new MigrationReconciliationError(report);
 
   const now = options.now ?? (() => new Date().toISOString());
   const newId = options.new_id ?? ((kind) => createId(kind));
@@ -114,6 +183,7 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
       ...(typeof row.fields.location === "string" ? { location: row.fields.location } : {}),
       ...(typeof row.fields.flow === "string" ? { flow: row.fields.flow } : {}),
       ...(typeof row.fields.description === "string" ? { description: row.fields.description } : {}),
+      ...(typeof row.fields.accent_color === "string" ? { accent_color: row.fields.accent_color } : {}),
       lifecycle_state: "Draft",
       current_draft_version_id: versionId,
       created_at: timestamp,
@@ -135,7 +205,7 @@ export async function importSelectedSources(options: ImportSelectedSourcesOption
       source_name: row.source.source_name,
       ...(row.source.sheet_or_slide ? { sheet_or_slide: row.source.sheet_or_slide } : {}),
       ...(row.source.side ? { side: row.source.side } : {}),
-      ...(row.source.raw_source_text ? { raw_source_text: row.source.raw_source_text } : {}),
+      ...(row.source.raw_source_text !== undefined ? { raw_source_text: row.source.raw_source_text } : {}),
       migration_batch: row.migration_batch,
       validation_state: sourceState(row),
     };
@@ -182,10 +252,12 @@ export class MigrationReconciliationError extends Error {
 }
 
 export class MigrationTemplateSelectionError extends Error {
-  readonly code = "missing_template_selection" as const;
-
-  constructor(readonly family: TemplateFamily) {
-    super(`Select a template and version for the ${family} family before importing.`);
+  constructor(
+    readonly family: TemplateFamily,
+    message = `Select a template and version for the ${family} family before importing.`,
+    readonly code: "missing_template_selection" | "template_family_mismatch" = "missing_template_selection",
+  ) {
+    super(message);
     this.name = "MigrationTemplateSelectionError";
   }
 }
