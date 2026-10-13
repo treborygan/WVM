@@ -1,11 +1,11 @@
 import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import { applyEditorCommand, type ResizeHandle } from "../../../domain/editor-commands";
-import type { Element, TemplateDocument } from "../../../domain/template-document";
+import type { TemplateDocument } from "../../../domain/template-document";
+import { buildTemplateRenderScene, type RenderSceneElement } from "../../../rendering/render-scene";
 import { isInsidePage } from "../geometry/bounds";
 import { snapMoveDeltas, snapResizeDeltas } from "../geometry/grid";
 import { snapMoveToGuides, snapResizeToGuides, type GuideSnapResult } from "../geometry/guides";
-import { pointsToMillimetres } from "../geometry/units";
 import { screenDeltaToMillimetres, type Viewport } from "../geometry/viewport";
 import "./editor.css";
 
@@ -34,29 +34,6 @@ interface PointerGesture {
   readonly handle?: ResizeHandle;
 }
 
-function resolveText(element: Extract<Element, { type: "text" }>, values: ArtboardProps["values"]): string {
-  if (element.content.kind === "literal") return element.content.value;
-  const value = values?.[element.content.path];
-  return value === null || value === undefined ? `[${element.content.path}]` : String(value);
-}
-
-function resolveColor(binding: { readonly kind: "literal"; readonly value: string } | { readonly kind: "binding"; readonly path: string }, values: ArtboardProps["values"]): string {
-  if (binding.kind === "literal") return binding.value;
-  const value = values?.[binding.path];
-  return typeof value === "string" ? value : `var(${binding.path.replaceAll(".", "-")}, #666)`;
-}
-
-function transform(element: Element): string | undefined {
-  if (element.rotation_degrees === 0) return undefined;
-  return `rotate(${element.rotation_degrees} ${element.x_mm + element.width_mm / 2} ${element.y_mm + element.height_mm / 2})`;
-}
-
-function label(element: Element, values?: ArtboardProps["values"]): string {
-  if (element.type === "text") return `Select text: ${resolveText(element, values)}`;
-  if (element.type === "image") return `Select image: ${element.source.kind === "asset" ? element.source.asset_id : element.source.path}`;
-  return `Select ${element.type}: ${element.id}`;
-}
-
 function onKeySelect(event: KeyboardEvent<SVGGElement>, id: string, props: ArtboardProps) {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
@@ -83,21 +60,21 @@ function onKeyResize(event: KeyboardEvent<SVGCircleElement>, id: string, handle:
   }
 }
 
-function renderElement(element: Element, props: ArtboardProps, pointerHandlers: {
+function renderElement(element: RenderSceneElement, props: ArtboardProps, pointerHandlers: {
   readonly onPointerDown: (event: PointerEvent<SVGGElement>) => void;
   readonly onPointerMove: (event: PointerEvent<SVGGElement>) => void;
   readonly onPointerUp: (event: PointerEvent<SVGGElement>) => void;
   readonly onPointerCancel: () => void;
 }) {
-  if (!element.visible) return null;
+  const source = element.source;
   const selected = props.selectedElementId === element.id;
-  const outOfPage = !isInsidePage(element, props.document.page);
+  const outOfPage = !isInsidePage(source, props.document.page);
   const common = {
     className: `artboard-element${selected ? " is-selected" : ""}${outOfPage ? " is-out-of-page" : ""}${element.locked ? " is-locked" : ""}`,
-    transform: transform(element),
+    transform: element.transform ?? undefined,
     role: "button" as const,
     tabIndex: element.locked ? -1 : 0,
-    "aria-label": label(element, props.values),
+    "aria-label": element.accessible_label,
     "aria-pressed": selected,
     "aria-disabled": element.locked,
     "data-element-id": element.id,
@@ -116,21 +93,14 @@ function renderElement(element: Element, props: ArtboardProps, pointerHandlers: 
   const height = element.height_mm;
   const resizeHandleRadiusMm = 12 / (props.viewport.pxPerMm * props.viewport.zoom);
   let artwork;
-  if (element.type === "text") {
-    const textAnchor = element.style.horizontal_align === "center" ? "middle" : element.style.horizontal_align === "right" ? "end" : "start";
-    const textX = element.style.horizontal_align === "center" ? x + width / 2 : element.style.horizontal_align === "right" ? x + width : x;
-    const textY = element.style.vertical_align === "top" ? y + pointsToMillimetres(element.style.font_size_pt) : element.style.vertical_align === "bottom" ? y + height : y + height / 2;
-    const fontWeight = element.style.font_weight === "normal" ? 400 : element.style.font_weight === "bold" ? 700 : element.style.font_weight;
-    artwork = <><defs><clipPath id={`artboard-clip-${element.id}`}><rect x={x} y={y} width={width} height={height} /></clipPath></defs><g clipPath={`url(#artboard-clip-${element.id})`}><text x={textX} y={textY} textAnchor={textAnchor} dominantBaseline="middle" fontFamily={element.style.font_family} fontSize={pointsToMillimetres(element.style.font_size_pt)} fontWeight={fontWeight} fontStyle={element.style.font_style} fill={resolveColor(element.style.color, props.values)}>{resolveText(element, props.values)}</text></g></>;
-  } else if (element.type === "rectangle" || element.type === "band" || element.type === "background") {
-    artwork = <rect x={x} y={y} width={width} height={height} fill={resolveColor(element.style.fill, props.values)} stroke={element.style.stroke ? resolveColor(element.style.stroke, props.values) : "none"} strokeWidth={element.style.stroke_width_mm} />;
-  } else if (element.type === "line" || element.type === "border") {
-    artwork = <line x1={x} y1={y} x2={x + width} y2={y + height} stroke={resolveColor(element.style.stroke, props.values)} strokeWidth={element.style.stroke_width_mm} />;
-  } else if (element.type === "image") {
-    const source = element.source.kind === "asset" ? element.source.asset_id : element.source.path;
-    artwork = <g><rect x={x} y={y} width={width} height={height} fill="#f1f2f3" stroke="#777" strokeDasharray="2 1" /><text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={3}>Image: {source}</text></g>;
+  if (element.kind === "text") {
+    artwork = <><defs><clipPath id={element.clip_path_id}><rect x={x} y={y} width={width} height={height} /></clipPath></defs><g clipPath={`url(#${element.clip_path_id})`}><text x={element.text_x_mm} y={element.text_y_mm} textAnchor={element.text_anchor} dominantBaseline="middle" fontFamily={element.font_family} fontSize={element.font_size_mm} fontWeight={element.font_weight} fontStyle={element.font_style} fill={element.fill}>{element.content}</text></g></>;
+  } else if (element.kind === "shape") {
+    artwork = <rect x={x} y={y} width={width} height={height} fill={element.fill} stroke={element.stroke} strokeWidth={element.stroke_width_mm} />;
+  } else if (element.kind === "line") {
+    artwork = <line x1={x} y1={y} x2={x + width} y2={y + height} stroke={element.stroke} strokeWidth={element.stroke_width_mm} />;
   } else {
-    return null;
+    artwork = <g><rect x={x} y={y} width={width} height={height} fill="#f1f2f3" stroke="#777" strokeDasharray="2 1" /><text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={3}>Image preview unavailable</text></g>;
   }
   const handles: readonly [ResizeHandle, number, number][] = [
     ["nw", x, y], ["n", x + width / 2, y], ["ne", x + width, y], ["e", x + width, y + height / 2],
@@ -150,11 +120,12 @@ export function Artboard(props: ArtboardProps) {
   const [previewDocument, setPreviewDocument] = useState<TemplateDocument | null>(null);
   const gestureDocument = previewDocument ?? props.document;
   const [activeGuides, setActiveGuides] = useState<GuideSnapResult>({ delta: { dx_mm: 0, dy_mm: 0 } });
-  const { width_mm, height_mm } = props.document.page;
+  const renderScene = buildTemplateRenderScene({ document: gestureDocument, values: props.values ?? {}, ariaLabel: "Template artboard" });
+  const { width_mm, height_mm } = renderScene.page;
   const { zoom, pxPerMm, pan } = props.viewport;
   const width = width_mm * pxPerMm * zoom;
   const height = height_mm * pxPerMm * zoom;
-  const elements = [...gestureDocument.elements].sort((a, b) => a.z_index - b.z_index || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const elements = renderScene.elements;
   function commandFor(gesture: PointerGesture, clientX: number, clientY: number) {
     const physicalDelta = screenDeltaToMillimetres({ x: clientX - gesture.startX, y: clientY - gesture.startY }, props.viewport);
     let delta = { dx_mm: physicalDelta.x, dy_mm: physicalDelta.y };
@@ -219,7 +190,7 @@ export function Artboard(props: ArtboardProps) {
   };
   return <svg className="editor-artboard" role="group" aria-label="Template artboard" width={width} height={height} viewBox={`0 0 ${width_mm} ${height_mm}`} style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, transformOrigin: "top left" }}>
     {props.showGrid ? <defs><pattern id="artboard-grid-pattern" width={props.gridStepMm ?? 1} height={props.gridStepMm ?? 1} patternUnits="userSpaceOnUse"><path d={`M ${props.gridStepMm ?? 1} 0 H 0 V ${props.gridStepMm ?? 1}`} fill="none" stroke="#b6c2cc" strokeWidth="0.18" /></pattern></defs> : null}
-    <rect className="artboard-page" x={0} y={0} width={width_mm} height={height_mm} />
+    <rect className="artboard-page" x={0} y={0} width={width_mm} height={height_mm} fill={renderScene.backgroundColor} />
     {props.showGrid ? <rect className="artboard-grid" x={0} y={0} width={width_mm} height={height_mm} fill="url(#artboard-grid-pattern)" pointerEvents="none" /> : null}
     {elements.map((element) => renderElement(element, { ...props, document: gestureDocument }, pointerHandlers))}
     {activeGuides.xGuide ? <line className="artboard-alignment-guide" data-testid="alignment-guide-x" x1={activeGuides.xGuide.position_mm} x2={activeGuides.xGuide.position_mm} y1={0} y2={height_mm}><title>Aligned to {activeGuides.xGuide.target}</title></line> : null}

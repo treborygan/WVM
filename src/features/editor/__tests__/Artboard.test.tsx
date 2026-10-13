@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TemplateDocument } from "../../../domain/template-document";
+import { buildTemplateRenderScene } from "../../../rendering/render-scene";
+import { renderTemplateSceneSvg } from "../../../rendering/svg-renderer";
 import { Artboard } from "../components/Artboard";
 import type { Viewport } from "../geometry/viewport";
 
@@ -35,6 +37,24 @@ describe("Artboard", () => {
     expect(Number(page.getAttribute("height"))).toBeCloseTo(297 * 96 / 25.4, 5);
     expect(Number(page.getAttribute("width"))! / Number(page.getAttribute("height"))!).toBeCloseTo(210 / 297, 10);
     expect(screen.getByText("A-01")).toBeVisible();
+  });
+
+  it("uses the same safe resolved color fallback as SVG export for invalid binding values", () => {
+    const textElement = document.elements[0];
+    if (textElement.type !== "text") throw new Error("Fixture must begin with a text element.");
+    const boundDocument: TemplateDocument = {
+      ...document,
+      elements: [{ ...textElement, style: { ...textElement.style, color: { kind: "binding", path: "visual.accent_color" } } }],
+    };
+    const values = { "visual.accent_color": "url(https://invalid.example/paint.svg#x)" };
+    const scene = buildTemplateRenderScene({ document: boundDocument, values, ariaLabel: "Canvas" });
+    const exportedText = new DOMParser().parseFromString(renderTemplateSceneSvg(scene).svg, "image/svg+xml").querySelector("text");
+    render(<Artboard document={boundDocument} viewport={{ zoom: 1, pxPerMm: 96 / 25.4, pan: { x: 0, y: 0 } }} values={values} />);
+    const canvasText = screen.getByText("A-01");
+    expect(canvasText).toHaveAttribute("fill", exportedText?.getAttribute("fill"));
+    expect(canvasText).toHaveAttribute("x", exportedText?.getAttribute("x"));
+    expect(canvasText).toHaveAttribute("y", exportedText?.getAttribute("y"));
+    expect(canvasText).toHaveAttribute("font-size", exportedText?.getAttribute("font-size"));
   });
 
   it("selects an element accessibly without writing screen coordinates into the document", () => {

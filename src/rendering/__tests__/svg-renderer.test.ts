@@ -21,6 +21,7 @@ describe("renderTemplateSvg", () => {
     const first = renderTemplateSvg(input);
     expect(first).toEqual(renderTemplateSvg(input));
     expect(first.svg).toContain('width="90mm" height="40mm" viewBox="0 0 90 40"');
+    expect(first.svg).toContain('<title id="wvm-svg-title">Aisle marker</title>');
     expect(first.svg.indexOf('id="first"')).toBeLessThan(first.svg.indexOf('id="bound"'));
     expect(first.svg).toContain("A &lt; B &amp; C");
     expect(first.svg).toContain('fill="#D40511"');
