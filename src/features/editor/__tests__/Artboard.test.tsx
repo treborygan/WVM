@@ -58,6 +58,13 @@ describe("Artboard", () => {
     expect(onNudgeElement).toHaveBeenCalledWith("location", 1, 0);
   });
 
+  it("uses the configured grid step for Alt+Arrow movement", () => {
+    const onNudgeElement = vi.fn();
+    render(<Artboard document={document} viewport={{ zoom: 1, pxPerMm: 96 / 25.4, pan: { x: 0, y: 0 } }} gridStepMm={5} onNudgeElement={onNudgeElement} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Select text: A-01" }), { key: "ArrowRight", altKey: true });
+    expect(onNudgeElement).toHaveBeenCalledWith("location", 5, 0);
+  });
+
   it("commits a drag as a millimetre delta on pointer release", () => {
     const onMoveElement = vi.fn();
     render(<Artboard document={document} viewport={{ zoom: 1, pxPerMm: 96 / 25.4, pan: { x: 8, y: -3 } }} onMoveElement={onMoveElement} />);
@@ -76,6 +83,43 @@ describe("Artboard", () => {
     fireEvent.pointerDown(text, { pointerId: 70, button: 0, clientX: 3, clientY: 4 });
     fireEvent.pointerUp(text, { pointerId: 70, clientX: 3 + 8 * pxPerMm * zoom, clientY: 4 });
     expect(onMoveElement).toHaveBeenCalledWith("location", expect.closeTo(8, 8), 0);
+  });
+
+  it("snaps pointer movement to the configured millimetre grid when enabled", () => {
+    const onMoveElement = vi.fn();
+    const pxPerMm = 96 / 25.4;
+    render(<Artboard document={document} viewport={{ zoom: 1, pxPerMm, pan: { x: 0, y: 0 } }} snapToGrid gridStepMm={5} onMoveElement={onMoveElement} />);
+    const text = screen.getByRole("button", { name: "Select text: A-01" });
+    fireEvent.pointerDown(text, { pointerId: 80, button: 0, clientX: 4, clientY: 7 });
+    fireEvent.pointerUp(text, { pointerId: 80, clientX: 4 + 8 * pxPerMm, clientY: 7 });
+    expect(onMoveElement).toHaveBeenCalledWith("location", 10, 1);
+  });
+
+  it("does not snap an element when the pointer is released without moving", () => {
+    const onMoveElement = vi.fn();
+    render(<Artboard document={document} viewport={{ zoom: 1, pxPerMm: 96 / 25.4, pan: { x: 0, y: 0 } }} snapToGrid gridStepMm={5} onMoveElement={onMoveElement} />);
+    const text = screen.getByRole("button", { name: "Select text: A-01" });
+    fireEvent.pointerDown(text, { pointerId: 82, button: 0, clientX: 4, clientY: 7 });
+    fireEvent.pointerUp(text, { pointerId: 82, clientX: 4, clientY: 7 });
+    expect(onMoveElement).not.toHaveBeenCalled();
+  });
+
+  it("snaps a dragged resize edge without changing the opposite anchor", () => {
+    const onResizeElement = vi.fn();
+    const pxPerMm = 96 / 25.4;
+    render(<Artboard document={document} viewport={{ zoom: 1, pxPerMm, pan: { x: 0, y: 0 } }} selectedElementId="location" snapToGrid gridStepMm={5} onResizeElement={onResizeElement} />);
+    const east = screen.getByRole("button", { name: /Resize location e;/ });
+    fireEvent.pointerDown(east, { pointerId: 81, button: 0, clientX: 4, clientY: 7 });
+    fireEvent.pointerUp(east, { pointerId: 81, clientX: 4 + 8 * pxPerMm, clientY: 7 });
+    expect(onResizeElement).toHaveBeenCalledWith("location", "e", 10, 0);
+  });
+
+  it("draws a visible millimetre grid only when requested", () => {
+    const { rerender } = render(<Artboard document={document} viewport={{ zoom: 1, pxPerMm: 96 / 25.4, pan: { x: 0, y: 0 } }} gridStepMm={5} />);
+    const page = screen.getByRole("group", { name: "Template artboard" });
+    expect(page.querySelector(".artboard-grid" )).toBeNull();
+    rerender(<Artboard document={document} viewport={{ zoom: 1, pxPerMm: 96 / 25.4, pan: { x: 0, y: 0 } }} gridStepMm={5} showGrid />);
+    expect(page.querySelector(".artboard-grid")).toHaveAttribute("fill", "url(#artboard-grid-pattern)");
   });
 
   it("routes resize-handle gestures to the typed resize callback", () => {

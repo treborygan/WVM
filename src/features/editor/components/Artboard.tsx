@@ -3,6 +3,7 @@ import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEven
 import { applyEditorCommand, type ResizeHandle } from "../../../domain/editor-commands";
 import type { Element, TemplateDocument } from "../../../domain/template-document";
 import { isInsidePage } from "../geometry/bounds";
+import { snapMoveDeltas, snapResizeDeltas } from "../geometry/grid";
 import { pointsToMillimetres } from "../geometry/units";
 import { screenDeltaToMillimetres, type Viewport } from "../geometry/viewport";
 import "./editor.css";
@@ -16,6 +17,9 @@ export interface ArtboardProps {
   readonly onNudgeElement?: (elementId: string, dxMm: number, dyMm: number) => void;
   readonly onMoveElement?: (elementId: string, dxMm: number, dyMm: number) => void;
   readonly onResizeElement?: (elementId: string, handle: ResizeHandle, dxMm: number, dyMm: number) => void;
+  readonly snapToGrid?: boolean;
+  readonly gridStepMm?: number;
+  readonly showGrid?: boolean;
 }
 
 interface PointerGesture {
@@ -55,7 +59,7 @@ function onKeySelect(event: KeyboardEvent<SVGGElement>, id: string, props: Artbo
     props.onSelectElement?.(id);
   } else if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
     event.preventDefault();
-    const step = event.shiftKey ? 10 : 1;
+    const step = event.shiftKey ? 10 : event.altKey ? props.gridStepMm ?? 1 : 1;
     const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
     const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
     props.onNudgeElement?.(id, dx, dy);
@@ -63,7 +67,7 @@ function onKeySelect(event: KeyboardEvent<SVGGElement>, id: string, props: Artbo
 }
 
 function onKeyResize(event: KeyboardEvent<SVGCircleElement>, id: string, handle: ResizeHandle, props: ArtboardProps) {
-  const step = event.shiftKey ? 10 : 1;
+  const step = event.shiftKey ? 10 : event.altKey ? props.gridStepMm ?? 1 : 1;
   const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
   const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
   if (dx === 0 && dy === 0) return;
@@ -147,10 +151,17 @@ export function Artboard(props: ArtboardProps) {
   const height = height_mm * pxPerMm * zoom;
   const elements = [...gestureDocument.elements].sort((a, b) => a.z_index - b.z_index || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   function commandFor(gesture: PointerGesture, clientX: number, clientY: number) {
-    const delta = screenDeltaToMillimetres({ x: clientX - gesture.startX, y: clientY - gesture.startY }, props.viewport);
+    const physicalDelta = screenDeltaToMillimetres({ x: clientX - gesture.startX, y: clientY - gesture.startY }, props.viewport);
+    let delta = { dx_mm: physicalDelta.x, dy_mm: physicalDelta.y };
+    if (props.snapToGrid && (delta.dx_mm !== 0 || delta.dy_mm !== 0)) {
+      const element = props.document.elements.find((item) => item.id === gesture.elementId);
+      if (element) delta = gesture.handle
+        ? snapResizeDeltas(element, gesture.handle, delta, props.gridStepMm ?? 1)
+        : snapMoveDeltas(element, delta, props.gridStepMm ?? 1);
+    }
     return gesture.handle
-      ? { type: "resize_element" as const, element_id: gesture.elementId, handle: gesture.handle, dx_mm: delta.x, dy_mm: delta.y, minimum_mm: 1 }
-      : { type: "move_element" as const, element_id: gesture.elementId, dx_mm: delta.x, dy_mm: delta.y };
+      ? { type: "resize_element" as const, element_id: gesture.elementId, handle: gesture.handle, dx_mm: delta.dx_mm, dy_mm: delta.dy_mm, minimum_mm: 1 }
+      : { type: "move_element" as const, element_id: gesture.elementId, dx_mm: delta.dx_mm, dy_mm: delta.dy_mm };
   }
   function beginGesture(event: PointerEvent<SVGGElement>) {
     const source = event.target;
@@ -187,7 +198,9 @@ export function Artboard(props: ArtboardProps) {
     onPointerCancel: () => { gestureRef.current = null; setPreviewDocument(null); },
   };
   return <svg className="editor-artboard" role="group" aria-label="Template artboard" width={width} height={height} viewBox={`0 0 ${width_mm} ${height_mm}`} style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, transformOrigin: "top left" }}>
+    {props.showGrid ? <defs><pattern id="artboard-grid-pattern" width={props.gridStepMm ?? 1} height={props.gridStepMm ?? 1} patternUnits="userSpaceOnUse"><path d={`M ${props.gridStepMm ?? 1} 0 H 0 V ${props.gridStepMm ?? 1}`} fill="none" stroke="#b6c2cc" strokeWidth="0.18" /></pattern></defs> : null}
     <rect className="artboard-page" x={0} y={0} width={width_mm} height={height_mm} />
+    {props.showGrid ? <rect className="artboard-grid" x={0} y={0} width={width_mm} height={height_mm} fill="url(#artboard-grid-pattern)" pointerEvents="none" /> : null}
     {elements.map((element) => renderElement(element, { ...props, document: gestureDocument }, pointerHandlers))}
   </svg>;
 }

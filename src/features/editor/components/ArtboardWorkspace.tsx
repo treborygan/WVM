@@ -4,6 +4,7 @@ import { EditorHistory } from "../../../domain/editor-history";
 import type { EditorCommand, ElementOrder, ResizeHandle } from "../../../domain/editor-commands";
 import type { TemplateDocument } from "../../../domain/template-document";
 import { Artboard } from "./Artboard";
+import { GridControls } from "./GridControls";
 import { Inspector } from "./Inspector";
 import { LayersPanel } from "./LayersPanel";
 import { ViewportControls } from "./ViewportControls";
@@ -19,6 +20,9 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
   readonly saving?: boolean;
 }) {
   const [zoom, setZoom] = useState(1);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [gridStepMm, setGridStepMm] = useState(1);
+  const [showGrid, setShowGrid] = useState(false);
   const [editedDocument, setEditedDocument] = useState(document);
   const [selectedElementId, setSelectedElementId] = useState<string | undefined>();
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -75,13 +79,14 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
         <button className="button button-secondary" type="button" onClick={undo} disabled={!historyRef.current.canUndo}>Undo</button>
         <button className="button button-secondary" type="button" onClick={redo} disabled={!historyRef.current.canRedo}>Redo</button>
         <ViewportControls zoom={zoom} onZoomChange={setZoom} />
+        <GridControls snapToGrid={snapToGrid} gridStepMm={gridStepMm} showGrid={showGrid} onSnapChange={setSnapToGrid} onStepChange={setGridStepMm} onShowChange={setShowGrid} />
         <button className="button button-secondary" type="button" onClick={requestClose}>Return to catalog</button>
       </div>
     </header>
     {commandError ? <p className="inspector-error" role="alert">{commandError}</p> : null}
     <div className="editor-workspace-body" onKeyDown={onEditorKeyDown}>
       <div className="artboard-canvas-scroll" aria-label="Scrollable template artboard">
-        <Artboard document={editedDocument} viewport={viewport} values={values} selectedElementId={selectedElementId}
+        <Artboard document={editedDocument} viewport={viewport} values={values} selectedElementId={selectedElementId} snapToGrid={snapToGrid} gridStepMm={gridStepMm} showGrid={showGrid}
           onSelectElement={setSelectedElementId}
           onNudgeElement={(elementId, dx_mm, dy_mm) => run({ type: "move_element", element_id: elementId, dx_mm, dy_mm })}
           onMoveElement={(elementId, dx_mm, dy_mm) => run({ type: "move_element", element_id: elementId, dx_mm, dy_mm })}
