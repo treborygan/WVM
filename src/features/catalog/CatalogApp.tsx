@@ -312,7 +312,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
               </div>
             ) : null}
             {rows.length > 0 ? <>
-              <p className="result-count" aria-live="polite">{total} visuals</p>
+              <p className="result-count" aria-live="polite">{total} {total === 1 ? "visual" : "visuals"}</p>
               <div className="table-scroll"><table className="visual-table"><thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Family</th><th scope="col">Stock class</th><th scope="col">Location</th><th scope="col">Flow</th><th scope="col">Source</th><th scope="col">State</th><th scope="col">Updated</th></tr></thead>
                 <tbody>{rows.map((row) => <tr key={row.id} className={selected?.visual.id === row.id ? "selected-row" : ""} tabIndex={0} aria-selected={selected?.visual.id === row.id} onClick={() => void selectVisual(row)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void selectVisual(row); } }}>
                   <th scope="row"><button type="button" className="row-link" onClick={(event) => { event.stopPropagation(); void selectVisual(row); }}>{row.name}</button></th><td>{row.visual_type}</td><td>{familyLabels[row.template_family]}</td><td>{row.stock_class ?? "—"}</td><td>{row.location ?? "—"}</td><td>{row.flow ?? "—"}</td><td>{row.legacy_search_text ?? "—"}</td><td><span className={`state-text state-${row.lifecycle_state.toLowerCase()}`}>{row.lifecycle_state}</span></td><td>{formatDate(row.updated_at)}</td>

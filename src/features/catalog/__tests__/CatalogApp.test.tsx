@@ -38,6 +38,20 @@ describe("CatalogApp", () => {
     await waitFor(() => expect(gateway.list).toHaveBeenLastCalledWith(expect.objectContaining({ search: "B-02", page: 1 })));
   });
 
+  it("uses the singular label when exactly one visual matches", async () => {
+    const first = (await gateway.list({ page: 1, page_size: 50 })).items[0] as VisualRow;
+    vi.mocked(gateway.list).mockResolvedValueOnce({
+      items: [first],
+      page: 1,
+      page_size: 50,
+      total: 1,
+      total_pages: 1,
+    });
+    render(<CatalogApp gateway={gateway} />);
+
+    expect(await screen.findByText("1 visual")).toBeVisible();
+  });
+
   it("shows an explicit empty state with synthetic sample initialization", async () => {
     vi.mocked(gateway.list).mockResolvedValueOnce({ items: [], page: 1, page_size: 50, total: 0, total_pages: 0 });
     vi.mocked(gateway.templates).mockResolvedValueOnce([]);
