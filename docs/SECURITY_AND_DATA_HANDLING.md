@@ -8,6 +8,8 @@ The repository is public. Commit only source, documentation, and synthetic test 
 
 Migration inputs stay in operator-controlled local paths outside the repository. Import tooling reads only explicitly selected inputs and emits a private manifest/report by default. WVM stores the database, assets, backups, and exports in platform-local application directories with user-only access where the OS supports it. Never put a live SQLite file in a synced/shared location.
 
+The desktop image importer uses the native file picker and scoped file read for one selected PNG/JPEG at a time. It rejects files over 20 MiB and image dimensions over 50,000 px on either axis or 100 megapixels total, determines MIME from the file signature, and writes bytes to a SHA-256 content-addressed file under app-local data. SQLite stores metadata and a relative locator; SVG is rejected to avoid importing active or externally-referencing vector content. The renderer only embeds `data:image/png` and `data:image/jpeg` base64 values and rejects remote URLs.
+
 ## Secrets and configuration
 
 `.env.example` contains variable names and safe defaults only. `.env` files, tokens, passwords, keys, and production paths are excluded. Future integrations use least-privilege scoped credentials in an OS-protected store and never embed secrets in source or logs.

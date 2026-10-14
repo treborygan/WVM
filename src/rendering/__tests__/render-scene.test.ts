@@ -50,4 +50,24 @@ describe("buildTemplateRenderScene", () => {
     expect(scene.elements[0]).toMatchObject({ kind: "text", content: "[visual.name]" });
     expect(scene.diagnostics.join(" ")).toMatch(/label.*visual.name.*missing/i);
   });
+
+  it("resolves a stored image asset into the canonical scene and reports missing assets", () => {
+    const imageDocument: TemplateDocument = { ...document, elements: [
+      { id: "logo", type: "image", x_mm: 2, y_mm: 3, width_mm: 20, height_mm: 10, rotation_degrees: 0, z_index: 0, visible: true, locked: false, fit: "contain", source: { kind: "asset", asset_id: "asset-1" as never } },
+      { id: "missing", type: "image", x_mm: 2, y_mm: 15, width_mm: 20, height_mm: 10, rotation_degrees: 0, z_index: 1, visible: true, locked: false, fit: "cover", source: { kind: "asset", asset_id: "asset-2" as never } },
+    ] };
+    const scene = buildTemplateRenderScene({ document: imageDocument, values: {}, ariaLabel: "Image fixture", assets: { "asset-1": "data:image/png;base64,aGVsbG8=" } });
+
+    expect(scene.elements[0]).toMatchObject({ kind: "image", href: "data:image/png;base64,aGVsbG8=", preserve_aspect_ratio: "xMidYMid meet" });
+    expect(scene.elements[1]).toMatchObject({ kind: "image", href: null, preserve_aspect_ratio: "xMidYMid slice" });
+    expect(scene.diagnostics.join(" ")).toMatch(/missing.*asset-2/i);
+  });
+
+  it("rejects remote image sources from the scene", () => {
+    const imageDocument: TemplateDocument = { ...document, elements: [{ id: "logo", type: "image", x_mm: 2, y_mm: 3, width_mm: 20, height_mm: 10, rotation_degrees: 0, z_index: 0, visible: true, locked: false, fit: "stretch", source: { kind: "asset", asset_id: "asset-1" as never } }] };
+    const scene = buildTemplateRenderScene({ document: imageDocument, values: {}, ariaLabel: "Image fixture", assets: { "asset-1": "https://example.invalid/logo.png" } });
+
+    expect(scene.elements[0]).toMatchObject({ kind: "image", href: null, preserve_aspect_ratio: "none" });
+    expect(scene.diagnostics.join(" ")).toMatch(/not a supported local PNG\/JPEG/i);
+  });
 });

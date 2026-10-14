@@ -3,14 +3,19 @@ use std::path::Path;
 
 use tauri::State;
 
+use crate::adapters::local_asset_store::LocalAssetStore;
+use crate::adapters::sqlite::AssetRecord;
 use crate::adapters::sqlite::{CatalogGateway, SqliteDatabase, StorageResult};
 use crate::application::catalog::{
     CatalogListQuery, CatalogPage, CatalogPort, CreateVisualRequest, SaveDraftRequest,
     TemplateChoice, TemplateListQuery, TransitionRequest, VisualDetail,
 };
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 
 pub struct AppState {
     database: SqliteDatabase,
+    asset_store: LocalAssetStore,
 }
 
 impl AppState {
@@ -18,7 +23,11 @@ impl AppState {
     pub fn open_at(local_app_data_dir: impl AsRef<Path>) -> StorageResult<Self> {
         fs::create_dir_all(local_app_data_dir.as_ref())?;
         let database = SqliteDatabase::open(local_app_data_dir.as_ref().join("wvm.sqlite"))?;
-        Ok(Self { database })
+        let asset_store = LocalAssetStore::new(local_app_data_dir.as_ref());
+        Ok(Self {
+            database,
+            asset_store,
+        })
     }
 
     pub fn database(&self) -> &SqliteDatabase {
@@ -28,6 +37,35 @@ impl AppState {
     pub fn database_path(&self) -> &Path {
         self.database.path()
     }
+}
+
+#[tauri::command]
+pub fn asset_import_image(
+    state: State<'_, AppState>,
+    original_name: String,
+    content_base64: String,
+) -> Result<AssetRecord, String> {
+    if content_base64.len() > 28 * 1024 * 1024 {
+        return Err("Image upload is too large; choose an image no larger than 20 MiB.".to_owned());
+    }
+    let bytes = STANDARD
+        .decode(content_base64)
+        .map_err(|_| "The selected image data is invalid.".to_owned())?;
+    state
+        .asset_store
+        .import_bytes(&state.database, &original_name, &bytes)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn asset_load_data_url(
+    state: State<'_, AppState>,
+    asset_id: String,
+) -> Result<Option<String>, String> {
+    state
+        .asset_store
+        .data_url(&state.database, &asset_id)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -9,6 +9,7 @@ export interface SvgRenderInput {
   readonly document: Parameters<typeof buildTemplateRenderScene>[0]["document"];
   readonly values: Parameters<typeof buildTemplateRenderScene>[0]["values"];
   readonly ariaLabel: string;
+  readonly assets?: Parameters<typeof buildTemplateRenderScene>[0]["assets"];
 }
 
 const xml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
@@ -30,6 +31,9 @@ function renderSceneElement(element: RenderSceneElement): string {
   }
   if (element.kind === "line") {
     return `${groupOpen}<line x1="${element.x_mm}" y1="${element.y_mm}" x2="${element.x_mm + element.width_mm}" y2="${element.y_mm + element.height_mm}" stroke="${xml(element.stroke)}" stroke-width="${element.stroke_width_mm}"/>${groupClose}`;
+  }
+  if (element.href) {
+    return `${groupOpen}<image x="${element.x_mm}" y="${element.y_mm}" width="${element.width_mm}" height="${element.height_mm}" href="${element.href}" preserveAspectRatio="${element.preserve_aspect_ratio}"/>${groupClose}`;
   }
   return `${groupOpen}<rect x="${element.x_mm}" y="${element.y_mm}" width="${element.width_mm}" height="${element.height_mm}" fill="#f1f2f3" stroke="#777" stroke-dasharray="2 1"/><text x="${element.x_mm + element.width_mm / 2}" y="${element.y_mm + element.height_mm / 2}" text-anchor="middle" dominant-baseline="middle" font-size="3" fill="#555">Image preview unavailable</text>${groupClose}`;
 }

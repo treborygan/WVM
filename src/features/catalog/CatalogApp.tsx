@@ -4,6 +4,8 @@ import type { TemplateFamily } from "../../domain/entities";
 import type { TemplateDocument } from "../../domain/template-document";
 import { exportTemplateDocumentAsSvg, type ExportSvgResult } from "../../application/export-template-svg";
 import { desktopSvgFilePort } from "../../adapters/desktop/svg-file-port";
+import { importImageAsset, loadAssetDataUrl } from "../../adapters/desktop/asset-files";
+import type { AssetId } from "../../domain/entities";
 import { ArtboardWorkspace } from "../editor/components/ArtboardWorkspace";
 import { desktopCatalogGateway, type CatalogGateway, type CatalogListQuery, type TemplateChoice, type VisualDetail, type VisualRow } from "./catalog-gateway";
 import { renderTemplatePreview } from "./template-preview";
@@ -27,6 +29,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [selected, setSelected] = useState<VisualDetail | null>(null);
+  const [assetDataUrls, setAssetDataUrls] = useState<Record<string, string>>({});
   const [editorOpen, setEditorOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -77,7 +80,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   }, [dialogMode]);
 
   const chosenTemplate = useMemo(() => templates.find((choice) => choice.template.id === selected?.visual.template_id), [selected?.visual.template_id, templates]);
-  const selectedPreview = useMemo(() => selected ? renderTemplatePreview(selected) : null, [selected]);
+  const selectedPreview = useMemo(() => selected ? renderTemplatePreview(selected, assetDataUrls) : null, [assetDataUrls, selected]);
   const editorValues = useMemo(() => selected ? ({
     ...(selected.current_version?.values ?? {}),
     "visual.name": selected.visual.name,
@@ -91,8 +94,29 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
 
   async function exportEditorSvg(document: TemplateDocument): Promise<ExportSvgResult> {
     if (!selected) return { status: "cancelled" };
-    return exportTemplateDocumentAsSvg({ document, values: editorValues, visualName: selected.visual.name }, desktopSvgFilePort);
+    return exportTemplateDocumentAsSvg({ document, values: editorValues, assets: assetDataUrls, visualName: selected.visual.name }, desktopSvgFilePort);
   }
+
+  async function importEditorImage(): Promise<{ readonly asset_id: AssetId; readonly href: string } | null> {
+    const imported = await importImageAsset();
+    if (!imported) return null;
+    setAssetDataUrls((current) => ({ ...current, [imported.asset.id]: imported.dataUrl }));
+    return { asset_id: imported.asset.id, href: imported.dataUrl };
+  }
+
+  const currentDocument = selected?.current_template_version?.document;
+  useEffect(() => {
+    if (!currentDocument) return;
+    const assetIds = [...new Set(currentDocument.elements.flatMap((element) => element.type === "image" && element.source.kind === "asset" ? [element.source.asset_id] : []))];
+    let active = true;
+    void Promise.all(assetIds.map(async (id) => [id, await loadAssetDataUrl(id)] as const)).then((entries) => {
+      if (!active) return;
+      setAssetDataUrls((current) => ({ ...current, ...Object.fromEntries(entries.filter((entry): entry is readonly [AssetId, string] => typeof entry[1] === "string")) }));
+    }).catch((reason: unknown) => {
+      if (active) setActionError(reason instanceof Error ? reason.message : "An image asset could not be loaded.");
+    });
+    return () => { active = false; };
+  }, [currentDocument]);
 
   async function selectVisual(row: VisualRow) {
     const generation = ++detailGeneration.current;
@@ -257,7 +281,7 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
 
       <main className="catalog-main" id="catalog">
         <header className="page-header"><h1>{editorOpen ? "Artboard preview" : "Visual catalog"}</h1><button className="button button-primary" onClick={() => { setActionError(null); setDialogMode("create"); }} disabled={!templates.length || busy || editorOpen}>New visual</button></header>
-        {editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onExportSvg={exportEditorSvg} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
+        {editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} assets={assetDataUrls} onImportImage={importEditorImage} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onExportSvg={exportEditorSvg} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
           <section className="catalog-list" aria-label="Visual catalog results">
             <form className="search-form" onSubmit={submitSearch}>
               <label className="search-field"><span className="visually-hidden">Search visuals</span><span aria-hidden="true">⌕</span>

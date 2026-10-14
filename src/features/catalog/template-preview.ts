@@ -7,7 +7,7 @@ export interface TemplatePreview {
   readonly diagnostics: readonly string[];
 }
 
-export function renderTemplatePreview(detail: VisualDetail): TemplatePreview | null {
+export function renderTemplatePreview(detail: VisualDetail, assets: Readonly<Record<string, string>> = {}): TemplatePreview | null {
   const raw = detail.current_template_version?.document;
   if (!raw) return null;
   const validation = validateTemplateDocument(raw);
@@ -24,5 +24,5 @@ export function renderTemplatePreview(detail: VisualDetail): TemplatePreview | n
   for (const [path, value] of Object.entries(detail.current_version?.values ?? {})) {
     if (typeof value === "string") values[path] = value;
   }
-  return renderTemplateSvg({ document: validation.document, values, ariaLabel: `${detail.visual.name} template preview` });
+  return renderTemplateSvg({ document: validation.document, values, assets, ariaLabel: `${detail.visual.name} template preview` });
 }

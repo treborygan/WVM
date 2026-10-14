@@ -26,6 +26,8 @@ fn main() {
             commands::catalog_duplicate,
             commands::catalog_save_draft,
             commands::catalog_transition,
+            commands::asset_import_image,
+            commands::asset_load_data_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Warehouse Visual Manager");

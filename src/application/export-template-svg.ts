@@ -16,6 +16,7 @@ export interface ExportSvgRequest {
   readonly document: TemplateDocument;
   readonly values: Readonly<Record<string, string | number | boolean | null>>;
   readonly visualName: string;
+  readonly assets?: Readonly<Record<string, string>>;
 }
 
 export function suggestedSvgFileName(name: string): string {
@@ -32,7 +33,7 @@ export function suggestedSvgFileName(name: string): string {
 export async function exportTemplateDocumentAsSvg(request: ExportSvgRequest, files: SvgFilePort): Promise<ExportSvgResult> {
   const validation = validateTemplateDocument(request.document);
   if (!validation.valid) return { status: "invalid", diagnostics: validation.diagnostics.map(({ message }) => message) };
-  const rendered = renderTemplateSvg({ document: validation.document, values: request.values, ariaLabel: `${request.visualName} artwork` });
+  const rendered = renderTemplateSvg({ document: validation.document, values: request.values, assets: request.assets, ariaLabel: `${request.visualName} artwork` });
   const path = await files.chooseDestination(suggestedSvgFileName(request.visualName));
   if (!path) return { status: "cancelled" };
   await files.writeText(path, rendered.svg);

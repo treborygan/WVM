@@ -14,6 +14,16 @@ const document: TemplateDocument = {
 };
 
 describe("ArtboardWorkspace element authoring", () => {
+  it("imports an image asset and places the stored graphic on the artboard", async () => {
+    const onImportImage = vi.fn().mockResolvedValue({ asset_id: "asset-logo", href: "data:image/png;base64,aGVsbG8=" });
+    render(<ArtboardWorkspace document={document} versionNumber={1} values={{}} onClose={vi.fn()} onSaveDraft={vi.fn()} onImportImage={onImportImage} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add image" }));
+    await waitFor(() => expect(onImportImage).toHaveBeenCalledOnce());
+    expect(screen.getByRole("group", { name: "Template artboard" }).querySelector("image")).toHaveAttribute("href", "data:image/png;base64,aGVsbG8=");
+    expect(screen.getByRole("button", { name: /Select layer image-/ })).toBeVisible();
+  });
+
   it("adds and deletes an element through undoable editor commands", () => {
     render(<ArtboardWorkspace document={document} versionNumber={1} values={{}} onClose={vi.fn()} onSaveDraft={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add text" }));

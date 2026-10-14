@@ -29,6 +29,7 @@
 .element-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
 .element-actions button { padding: 5px 7px; border: 1px solid #d4d8dc; border-radius: 3px; background: #fff; color: #30363c; font-size: 10px; cursor: pointer; }
 .element-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.layers-help { color: #4c5965; font-size: 0.82rem; margin: 0.5rem 0; }
 .layers-panel ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .layers-panel li { padding: 8px; border: 1px solid #dfe2e5; border-radius: 4px; }
 .layers-panel li.is-selected { border-color: #1767a5; background: #eef6fc; }

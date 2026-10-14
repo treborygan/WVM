@@ -68,4 +68,21 @@ impl AssetRepository {
             .optional()?;
         Ok(asset)
     }
+
+    pub fn get_by_hash(
+        &self,
+        connection: &Connection,
+        content_hash: &str,
+    ) -> StorageResult<Option<AssetRecord>> {
+        let asset = connection.query_row(
+            "SELECT id, kind, original_name, mime_type, content_hash, storage_locator, intrinsic_width_px, intrinsic_height_px, created_at FROM assets WHERE content_hash = ?1",
+            [content_hash],
+            |row| Ok(AssetRecord {
+                id: row.get(0)?, kind: row.get(1)?, original_name: row.get(2)?, mime_type: row.get(3)?,
+                content_hash: row.get(4)?, storage_locator: row.get(5)?, intrinsic_width_px: row.get(6)?,
+                intrinsic_height_px: row.get(7)?, created_at: row.get(8)?,
+            }),
+        ).optional()?;
+        Ok(asset)
+    }
 }

@@ -2,7 +2,7 @@ import type { Element } from "../../../domain/template-document";
 import type { ElementOrder } from "../../../domain/editor-commands";
 import "./editor.css";
 
-export function LayersPanel({ elements, selectedElementId, onSelectElement, onToggleVisibility, onToggleLock, onReorder, onAddElement, onDeleteElement }: {
+export function LayersPanel({ elements, selectedElementId, onSelectElement, onToggleVisibility, onToggleLock, onReorder, onAddElement, onImportImage, onDeleteElement }: {
   readonly elements: readonly Element[];
   readonly selectedElementId?: string;
   readonly onSelectElement: (id: string) => void;
@@ -10,6 +10,7 @@ export function LayersPanel({ elements, selectedElementId, onSelectElement, onTo
   readonly onToggleLock: (id: string, locked: boolean) => void;
   readonly onReorder: (id: string, position: ElementOrder) => void;
   readonly onAddElement: (type: "text" | "rectangle" | "line") => void;
+  readonly onImportImage?: () => void;
   readonly onDeleteElement: (id: string) => void;
 }) {
   const ordered = [...elements].sort((a, b) => b.z_index - a.z_index || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
@@ -20,8 +21,10 @@ export function LayersPanel({ elements, selectedElementId, onSelectElement, onTo
       <button type="button" onClick={() => onAddElement("text")}>Add text</button>
       <button type="button" onClick={() => onAddElement("rectangle")}>Add rectangle</button>
       <button type="button" onClick={() => onAddElement("line")}>Add line</button>
+      <button type="button" onClick={onImportImage} disabled={!onImportImage}>Add image</button>
       <button type="button" onClick={() => selectedElement && onDeleteElement(selectedElement.id)} disabled={!selectedElement || selectedElement.locked}>Delete selected element</button>
     </div>
+    <p className="layers-help">Import PNG or JPEG images up to 20 MiB. SVG import is not supported yet.</p>
     {ordered.length ? <ol>
       {ordered.map((element) => <li key={element.id} className={selectedElementId === element.id ? "is-selected" : ""}>
         <button className="layer-select" type="button" onClick={() => onSelectElement(element.id)} aria-label={`Select layer ${element.id}`} aria-current={selectedElementId === element.id ? "true" : undefined}>

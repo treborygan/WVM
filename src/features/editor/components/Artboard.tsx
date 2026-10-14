@@ -13,6 +13,7 @@ export interface ArtboardProps {
   readonly document: TemplateDocument;
   readonly viewport: Viewport;
   readonly values?: Readonly<Record<string, string | number | boolean | null>>;
+  readonly assets?: Readonly<Record<string, string>>;
   readonly selectedElementId?: string;
   readonly onSelectElement?: (elementId: string) => void;
   readonly onNudgeElement?: (elementId: string, dxMm: number, dyMm: number) => void;
@@ -99,6 +100,8 @@ function renderElement(element: RenderSceneElement, props: ArtboardProps, pointe
     artwork = <rect x={x} y={y} width={width} height={height} fill={element.fill} stroke={element.stroke} strokeWidth={element.stroke_width_mm} />;
   } else if (element.kind === "line") {
     artwork = <line x1={x} y1={y} x2={x + width} y2={y + height} stroke={element.stroke} strokeWidth={element.stroke_width_mm} />;
+  } else if (element.href) {
+    artwork = <image x={x} y={y} width={width} height={height} href={element.href} preserveAspectRatio={element.preserve_aspect_ratio} />;
   } else {
     artwork = <g><rect x={x} y={y} width={width} height={height} fill="#f1f2f3" stroke="#777" strokeDasharray="2 1" /><text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={3}>Image preview unavailable</text></g>;
   }
@@ -120,7 +123,7 @@ export function Artboard(props: ArtboardProps) {
   const [previewDocument, setPreviewDocument] = useState<TemplateDocument | null>(null);
   const gestureDocument = previewDocument ?? props.document;
   const [activeGuides, setActiveGuides] = useState<GuideSnapResult>({ delta: { dx_mm: 0, dy_mm: 0 } });
-  const renderScene = buildTemplateRenderScene({ document: gestureDocument, values: props.values ?? {}, ariaLabel: "Template artboard" });
+  const renderScene = buildTemplateRenderScene({ document: gestureDocument, values: props.values ?? {}, assets: props.assets, ariaLabel: "Template artboard" });
   const { width_mm, height_mm } = renderScene.page;
   const { zoom, pxPerMm, pan } = props.viewport;
   const width = width_mm * pxPerMm * zoom;

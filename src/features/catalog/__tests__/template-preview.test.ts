@@ -41,7 +41,7 @@ describe("catalog template preview", () => {
 
     const preview = renderTemplatePreview(updated)!;
     expect(preview.svg).toContain("Image preview unavailable");
-    expect(preview.diagnostics).toEqual(['Image “brand-art” is not available to the SVG preview.']);
+    expect(preview.diagnostics).toEqual(['Image “brand-art” asset brand.logo is missing or is not a supported local PNG/JPEG image.']);
   });
 
   it("labels overflow behavior that has not been implemented faithfully", async () => {

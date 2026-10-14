@@ -3837,11 +3837,13 @@ dependencies = [
 
 [[package]]
 name = "warehouse-visual-manager"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
+ "base64 0.22.1",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

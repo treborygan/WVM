@@ -2,6 +2,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 
 import { EditorHistory } from "../../../domain/editor-history";
 import type { ExportSvgResult } from "../../../application/export-template-svg";
+import type { AssetId } from "../../../domain/entities";
 import type { EditorCommand, ElementOrder, ResizeHandle } from "../../../domain/editor-commands";
 import type { Element, TemplateDocument } from "../../../domain/template-document";
 import { Artboard } from "./Artboard";
@@ -12,13 +13,15 @@ import { ViewportControls } from "./ViewportControls";
 import { defaultViewport } from "../geometry/viewport";
 import "./editor.css";
 
-export function ArtboardWorkspace({ document, versionNumber, values, onClose, onSaveDraft, onExportSvg, saving = false }: {
+export function ArtboardWorkspace({ document, versionNumber, values, assets = {}, onClose, onSaveDraft, onExportSvg, onImportImage, saving = false }: {
   readonly document: TemplateDocument;
   readonly versionNumber: number;
   readonly values: Readonly<Record<string, string | number | boolean | null>>;
+  readonly assets?: Readonly<Record<string, string>>;
   readonly onClose: () => void;
   readonly onSaveDraft: (document: TemplateDocument) => void;
   readonly onExportSvg?: (document: TemplateDocument) => Promise<ExportSvgResult>;
+  readonly onImportImage?: () => Promise<{ readonly asset_id: AssetId; readonly href: string } | null>;
   readonly saving?: boolean;
 }) {
   const [zoom, setZoom] = useState(1);
@@ -31,6 +34,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
   const [selectedElementId, setSelectedElementId] = useState<string | undefined>();
   const [commandError, setCommandError] = useState<string | null>(null);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [importedAssets, setImportedAssets] = useState<Record<string, string>>({});
   const historyRef = useRef<EditorHistory | null>(null);
   if (!historyRef.current) historyRef.current = new EditorHistory(document);
   const viewport = defaultViewport(zoom);
@@ -105,6 +109,27 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
     setSelectedElementId(id);
   }
 
+  async function importImage() {
+    if (!onImportImage) return;
+    setCommandError(null);
+    try {
+      const imported = await onImportImage();
+      if (!imported) return;
+      const id = `image-${crypto.randomUUID()}`;
+      const offset = 10 + (editedDocument.elements.length % 12) * 4;
+      const element: Element = {
+        id, type: "image", x_mm: offset, y_mm: offset, width_mm: 60, height_mm: 40,
+        rotation_degrees: 0, z_index: 0, visible: true, locked: false,
+        source: { kind: "asset", asset_id: imported.asset_id }, fit: "contain",
+      };
+      run({ type: "add_element", element });
+      setImportedAssets((current) => ({ ...current, [imported.asset_id]: imported.href }));
+      setSelectedElementId(id);
+    } catch (reason) {
+      setCommandError(reason instanceof Error ? reason.message : "The image could not be imported.");
+    }
+  }
+
   function deleteElement(id: string) {
     run({ type: "remove_element", element_id: id });
     setSelectedElementId(undefined);
@@ -128,7 +153,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
     {commandError ? <p className="inspector-error" role="alert">{commandError}</p> : null}
     <div className="editor-workspace-body" onKeyDown={onEditorKeyDown}>
       <div className="artboard-canvas-scroll" aria-label="Scrollable template artboard">
-        <Artboard document={editedDocument} viewport={viewport} values={values} selectedElementId={selectedElementId} snapToGrid={snapToGrid} snapToGuides={snapToGuides} gridStepMm={gridStepMm} showGrid={showGrid} onGuideHint={setGuideHint}
+        <Artboard document={editedDocument} viewport={viewport} values={values} assets={{ ...assets, ...importedAssets }} selectedElementId={selectedElementId} snapToGrid={snapToGrid} snapToGuides={snapToGuides} gridStepMm={gridStepMm} showGrid={showGrid} onGuideHint={setGuideHint}
           onSelectElement={setSelectedElementId}
           onNudgeElement={(elementId, dx_mm, dy_mm) => run({ type: "move_element", element_id: elementId, dx_mm, dy_mm })}
           onMoveElement={(elementId, dx_mm, dy_mm) => run({ type: "move_element", element_id: elementId, dx_mm, dy_mm })}
@@ -136,7 +161,7 @@ export function ArtboardWorkspace({ document, versionNumber, values, onClose, on
       </div>
       <div className="editor-workspace-panels">
         <LayersPanel elements={editedDocument.elements} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId}
-          onToggleVisibility={changeVisibility} onToggleLock={changeLock} onReorder={reorder} onAddElement={addElement} onDeleteElement={deleteElement} />
+          onToggleVisibility={changeVisibility} onToggleLock={changeLock} onReorder={reorder} onAddElement={addElement} onImportImage={importImage} onDeleteElement={deleteElement} />
       </div>
       <Inspector element={selectedElement} page={editedDocument.page} values={values}
         onApplyGeometry={(element_id, geometry) => run({ type: "set_element_geometry", element_id, geometry })}

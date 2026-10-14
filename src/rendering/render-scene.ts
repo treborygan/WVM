@@ -6,6 +6,8 @@ export interface RenderSceneInput {
   readonly document: TemplateDocument;
   readonly values: Readonly<Record<string, RenderValue>>;
   readonly ariaLabel: string;
+  /** Locally stored and validated image data URLs, keyed by stable asset ID. */
+  readonly assets?: Readonly<Record<string, string>>;
 }
 
 interface RenderSceneElementBase {
@@ -53,6 +55,8 @@ export interface RenderSceneLineElement extends RenderSceneElementBase {
 export interface RenderSceneImageElement extends RenderSceneElementBase {
   readonly kind: "image";
   readonly source_label: string;
+  readonly href: string | null;
+  readonly preserve_aspect_ratio: "xMidYMid meet" | "xMidYMid slice" | "none";
 }
 
 export type RenderSceneElement = RenderSceneTextElement | RenderSceneShapeElement | RenderSceneLineElement | RenderSceneImageElement;
@@ -66,6 +70,7 @@ export interface RenderScene {
 }
 
 const safeColorPattern = /^#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i;
+const safeImageDataUrlPattern = /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 function resolveText(element: Extract<Element, { type: "text" }>, values: RenderSceneInput["values"], diagnostics: string[]): string {
   if (element.content.kind === "literal") return element.content.value;
@@ -169,8 +174,15 @@ export function buildTemplateRenderScene(input: RenderSceneInput): RenderScene {
 
     if (element.type === "image") {
       const sourceLabel = element.source.kind === "asset" ? element.source.asset_id : element.source.path;
-      diagnostics.push(`Image “${element.id}” is not available to the SVG preview.`);
-      elements.push({ ...base(element, `Select image: ${sourceLabel}`), kind: "image", source_label: sourceLabel });
+      const candidate = element.source.kind === "asset"
+        ? input.assets?.[element.source.asset_id]
+        : input.values["brand.logo"];
+      const href = typeof candidate === "string" && safeImageDataUrlPattern.test(candidate) ? candidate : null;
+      if (!href) diagnostics.push(`Image “${element.id}” asset ${sourceLabel} is missing or is not a supported local PNG/JPEG image.`);
+      elements.push({
+        ...base(element, `Select image: ${sourceLabel}`), kind: "image", source_label: sourceLabel, href,
+        preserve_aspect_ratio: element.fit === "contain" ? "xMidYMid meet" : element.fit === "cover" ? "xMidYMid slice" : "none",
+      });
     }
   }
 

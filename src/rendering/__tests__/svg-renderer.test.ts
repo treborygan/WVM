@@ -39,6 +39,14 @@ describe("renderTemplateSvg", () => {
     const imageDocument: TemplateDocument = { ...document, elements: [{ id: "image", type: "image", x_mm: 1, y_mm: 2, width_mm: 10, height_mm: 8, rotation_degrees: 0, z_index: 0, visible: true, locked: false, fit: "contain", source: { kind: "binding", path: "brand.logo" } }] };
     const output = renderTemplateSvg({ document: imageDocument, values: {}, ariaLabel: "Image fixture" });
     expect(output.svg).toContain("Image preview unavailable");
-    expect(output.diagnostics.join(" ")).toMatch(/not available/i);
+    expect(output.diagnostics.join(" ")).toMatch(/missing or is not a supported local/i);
+  });
+
+  it("embeds validated local image data and preserves the requested fit mode", () => {
+    const imageDocument: TemplateDocument = { ...document, elements: [{ id: "brand-image", type: "image", x_mm: 1, y_mm: 2, width_mm: 10, height_mm: 8, rotation_degrees: 0, z_index: 0, visible: true, locked: false, fit: "cover", source: { kind: "asset", asset_id: "asset-1" as never } }] };
+    const output = renderTemplateSvg({ document: imageDocument, values: {}, ariaLabel: "Image fixture", assets: { "asset-1": "data:image/png;base64,aGVsbG8=" } });
+
+    expect(output.svg).toContain('<image x="1" y="2" width="10" height="8" href="data:image/png;base64,aGVsbG8=" preserveAspectRatio="xMidYMid slice"/>');
+    expect(output.diagnostics).toEqual([]);
   });
 });
