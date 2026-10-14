@@ -113,13 +113,13 @@
 - Consumes: domain and repositories from Tasks 2–3.
 - Produces: `listVisuals(query): Page<VisualSummary>`, `getVisualDetail(id): VisualDetail`, `duplicateVisual(id): DraftVisual`; staging mapper; `reconcileMigration(staging, baseline): MigrationReport`; import command that preserves source refs and blocks count/hash drift. Import accepts operator-selected private input paths and never expects source files in Git.
 
-- [ ] **Step 1: Write failing tests** for search/filter/sort, detail loading, duplicate identity/content, stable legacy IDs, provenance, count/hash mismatch, duplicate IDs, malformed source rows, and all six synthetic special-exception flags.
-- [ ] **Step 2: Run `npm run test -- tests/migration tests/application/catalog.test.ts`;** expect failures before the use cases/importer exist.
-- [ ] **Step 3: Implement catalog query/duplicate use cases** against repository interfaces; duplicate creates a new Draft identity and retains selected provenance.
-- [ ] **Step 4: Implement staging normalization and reconciliation** for POC-shaped inputs, producing a machine-readable report and rejecting unexplained drift.
-- [ ] **Step 5: Implement transactional import** with preserved IDs/references and explicit manual-validation state for `gang-special-2up` records.
-- [ ] **Step 6: Run focused tests, `npm run typecheck`, and `cargo test`;** scan fixtures to confirm they contain only generated data.
-- [ ] **Step 7: Commit** as `feat(catalog): add migration and read workflows`.
+- [x] **Step 1: Write failing tests** for search/filter/sort, detail loading, duplicate identity/content, stable legacy IDs, provenance, count/hash mismatch, duplicate IDs, malformed source rows, and all six synthetic special-exception flags.
+- [x] **Step 2: Run `npm run test -- tests/migration tests/application/catalog.test.ts`;** expect failures before the use cases/importer exist.
+- [x] **Step 3: Implement catalog query/duplicate use cases** against repository interfaces; duplicate creates a new Draft identity and retains selected provenance.
+- [x] **Step 4: Implement staging normalization and reconciliation** for POC-shaped inputs, producing a machine-readable report and rejecting unexplained drift.
+- [x] **Step 5: Implement transactional import** with preserved IDs/references and explicit manual-validation state for `gang-special-2up` records.
+- [x] **Step 6: Run focused tests, `npm run typecheck`, and `cargo test`;** scan fixtures to confirm they contain only generated data.
+- [x] **Step 7: Commit** as `feat(catalog): add migration and read workflows`.
 
 ## Task 5: Implement the editor viewport and physical geometry
 
@@ -132,19 +132,19 @@
 - Consumes: `TemplateDocument` and `Element` from Task 2.
 - Produces: `mmToScreen(point, viewport): ScreenPoint`, `screenToMm(point, viewport): MmPoint`, `getElementBounds(element): BoundsMm`, and an SVG artboard rendering canonical physical geometry.
 
-- [ ] **Step 1: Write failing tests** for mm↔screen round trip, 1 pt→mm font conversion, page aspect ratio, page bounds, and equivalent physical delta at 25%, 100%, and 400% zoom.
-- [ ] **Step 2: Run `npm run test -- src/features/editor/geometry`;** expect failures before transform helpers exist.
-- [ ] **Step 3: Implement unit/viewport transforms** with top-left origin, explicit CSS px/mm conversion, zoom, and pan.
-- [ ] **Step 4: Render a minimal SVG artboard** with exact mm width/height/viewBox and zoom controls; do not add drag editing in this task.
-- [ ] **Step 5: Run focused tests, `npm run typecheck`, and `npm run build`;** expect geometry and artboard tests to pass.
-- [ ] **Step 6: Verify no screen pixel value is written into the canonical document.**
+- [x] **Step 1: Write failing tests** for mm↔screen round trip, 1 pt→mm font conversion, page aspect ratio, page bounds, and equivalent physical delta at 25%, 100%, and 400% zoom.
+- [x] **Step 2: Run `npm run test -- src/features/editor/geometry`;** verified failures before geometry helpers existed.
+- [x] **Step 3: Implement unit/viewport transforms** with top-left origin, explicit CSS px/mm conversion, zoom, and pan.
+- [x] **Step 4: Render an SVG artboard** with exact mm viewBox, zoom controls, and accessible selection, reachable from selected catalog records.
+- [x] **Step 5: Run focused tests, `npm run typecheck`, and `npm run build`;** expect geometry and artboard tests to pass.
+- [x] **Step 6: Verify no screen pixel value is written into the canonical document.**
 - [ ] **Step 7: Commit** as `feat(editor): add mm viewport and artboard`.
 
 ## Task 6: Add selection, manipulation, inspector, and edit history
 
 **Files:**
 - Create: `src/domain/editor-commands.ts`, `src/domain/editor-history.ts`
-- Create: `src/features/editor/components/SelectionOverlay.tsx`, `src/features/editor/components/Inspector.tsx`, `src/features/editor/components/LayersPanel.tsx`
+- Create: `src/features/editor/components/ArtboardWorkspace.tsx`, `src/features/editor/components/Inspector.tsx`, `src/features/editor/components/LayersPanel.tsx`
 - Create: `src/features/editor/__tests__/manipulation.test.ts`, `src/domain/__tests__/editor-history.test.ts`, `tests/features/editor/Inspector.test.tsx`
 
 **Interfaces:**
@@ -153,9 +153,9 @@
 
 - [ ] **Step 1: Write failing tests** for zoom-independent drag/resize at 25/100/400%, anchor preservation, snap tolerance, positive dimensions, locked/hidden behavior, numeric edits, z-order, visibility, and deterministic undo/redo.
 - [ ] **Step 2: Run `npm run test -- src/features/editor/__tests__ src/domain/__tests__/editor-history.test.ts`;** expect failures before commands/history are implemented.
-- [ ] **Step 3: Implement immutable commands** with validation and one history entry per committed gesture/inspector apply; prohibit DOM snapshots.
+- [x] **Step 3: Implement immutable commands** with validation and one history entry per committed gesture/inspector apply; prohibit DOM snapshots.
 - [ ] **Step 4: Implement selection handles, grid/guides, pointer drag/resize, and exact inspector controls** with keyboard equivalents and focus cues.
-- [ ] **Step 5: Implement LayersPanel** with front/back and one-step ordering, visibility, and lock controls.
+- [x] **Step 5: Implement LayersPanel** with front/back and one-step ordering, visibility, and lock controls.
 - [ ] **Step 6: Run focused tests, `npm run typecheck`, `npm run test`, and `npm run build`;** expect all editor checks to pass.
 - [ ] **Step 7: Commit** as `feat(editor): add geometry editing and history`.
 
@@ -240,6 +240,18 @@
 - [ ] **Step 8: Commit** as `feat(release): complete WVM V1 acceptance and packaging`.
 
 ## Execution notes
+
+### Editable preview checkpoint (2026-10-14)
+
+Release 0.1.10 centralizes resolved text, paint, clipping, element order, and diagnostics in `src/rendering/render-scene.ts`; the interactive artboard, catalog preview, and SVG export use that shared scene. This fixes an unsafe-preview inconsistency where an invalid bound color could reach the live SVG while export substituted a safe fallback, and makes export and canvas physical text placement agree. Release 0.1.9 adds visual/brand bindings to shape fills, alongside fixed fill editing. Release 0.1.8 adds deterministic single-artboard SVG export. Output has physical mm width/height and viewBox, escaped text, stable element order, and safe fallbacks. Unsupported wrapping, fit, ellipsis, and image assets are diagnosed. Export validates the document, uses native Save As, and writes after a path is chosen. Release 0.1.7 added text-source and text-color binding controls; release 0.1.6 added text alignment and italic styling; release 0.1.5 added text, rectangle, and line insertion/deletion. The editor retains undoable style changes, alignment guides, configurable grid, exact mm geometry, layers, and atomic immutable saves. Verification at this checkpoint: 198 frontend tests across 26 test files, 37 Rust tests, production build, `cargo fmt --check`, `npm audit`, and Windows x64 MSI build pass. Stage 3 is partially complete: version-pinned asset/font resolution, multi-copy sheets, PDF, and print are open. Stages 4–6 remain open. This checkpoint is not the completed V1 release.
+
+### Image asset checkpoint (release 0.1.11)
+
+The editor imports one PNG or JPEG from the native picker (maximum 20 MiB, 100 megapixels). Rust checks signatures and dimensions, stores bytes by SHA-256 under the platform-local app-data `assets/` directory, records metadata in the existing SQLite `assets` table, deduplicates identical content, and verifies stored bytes before loading. Missing managed bytes are repaired when the same image is reimported. The shared render scene supplies the image to the canvas, catalog preview, and deterministic SVG as an embedded data URI; contain/cover/stretch map to SVG `preserveAspectRatio`. Remote URLs and non-PNG/JPEG data are rejected. This is basic image asset support, not a brand library: SVG import, brand profile management, fonts, pruning/backup of assets, multi-copy sheets, PDF, and print remain open. The checkpoint does not satisfy V1 acceptance.
+
+### Usability and PCRN package checkpoint (release 0.1.12)
+
+Release 0.1.12 fixes the catalog count label for a single search result (`1 visual`) and adds a regression test. The branded MSI was upgraded and launched on PCRN; the installed catalog, filtering, record selection, and artboard opened successfully. The editor's text, rectangle, line, undo, and redo interactions rendered as expected. A PNG imported through the Windows picker was saved in a new immutable draft, remained visible after reopening the artboard, and exported through the native Save As dialog as a valid 210×297 mm SVG with an embedded PNG data URI. The screenshots are captured from the installed package. This package checkpoint is not full V1 acceptance; production data migration, printing, backup/restore, and PDF remain open.
 
 - The ten tasks replace the original 22-phase outline by grouping work with shared contracts while preserving review gates between domain/storage, catalog/migration, editor geometry/operations, authoring/lifecycle, SVG/sheet rendering, PDF/print, and release/acceptance.
 - Do not start Task 1 implementation until the foundation documentation is approved.

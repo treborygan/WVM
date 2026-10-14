@@ -17,7 +17,7 @@ pub(super) const TEMPLATE_FAMILIES: [&str; 5] = [
     "stand-level-instruction-3up",
 ];
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct TemplateListQuery {
     pub search: Option<String>,
     pub family: Option<String>,

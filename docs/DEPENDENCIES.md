@@ -8,8 +8,12 @@ Direct application dependencies and development/test dependencies are listed bel
 | --- | --- | --- | --- | --- |
 | React | 19.3.0 | Render the application shell | MIT | Direct runtime |
 | React DOM | 19.3.0 | Mount React into the webview DOM | MIT | Direct runtime |
-| `@tauri-apps/api` | 2.11.1 | Typed frontend API boundary for the Tauri host | Apache-2.0 OR MIT | Direct runtime |
-| `tauri` | 2.11.6 | Rust desktop application host | Apache-2.0 OR MIT | Direct runtime |
+| `@tauri-apps/api` | 2.12.3 | Typed frontend API boundary for the Tauri host | Apache-2.0 OR MIT | Direct runtime |
+| `@tauri-apps/plugin-dialog` | 2.8.2 | Operator-selected Save As dialog for SVG output | Apache-2.0 OR MIT | Direct runtime |
+| `@tauri-apps/plugin-fs` | 2.7.0 | Write exported SVG to the path granted by the Save As dialog | Apache-2.0 OR MIT | Direct runtime |
+| `tauri` | 2.12.3 | Rust desktop application host | Apache-2.0 OR MIT | Direct runtime |
+| `tauri-plugin-dialog` | 2.8.0 | Native Windows file save dialog | Apache-2.0 OR MIT | Direct runtime |
+| `tauri-plugin-fs` | 2.7.0 | Scoped text-file write for operator-selected exports | Apache-2.0 OR MIT | Direct runtime |
 | `rusqlite` | 0.40.2 | Local SQLite persistence with bundled SQLite | MIT | Direct runtime |
 | `serde` | 1.0.229 | Serialize adapter records and structured data | Apache-2.0 OR MIT | Direct runtime |
 | `serde_json` | 1.0.151 | Persist and validate schema-versioned JSON documents | Apache-2.0 OR MIT | Direct runtime |
@@ -18,8 +22,8 @@ Direct application dependencies and development/test dependencies are listed bel
 
 | Dependency | Pinned version | Purpose | Licence | Classification |
 | --- | --- | --- | --- | --- |
-| `@tauri-apps/cli` | 2.11.5 | Run the desktop development/build commands | Apache-2.0 OR MIT | Direct development |
-| `tauri-build` | 2.6.3 | Generate Tauri build context from configuration | Apache-2.0 OR MIT | Direct build |
+| `@tauri-apps/cli` | 2.12.2 | Run the desktop development/build commands | Apache-2.0 OR MIT | Direct development |
+| `tauri-build` | 2.7.2 | Generate Tauri build context from configuration | Apache-2.0 OR MIT | Direct build |
 | TypeScript | 7.0.2 | Static type checking | Apache-2.0 | Direct development |
 | Vite | 8.3.1 | Frontend development server and production build | MIT | Direct development |
 | `@vitejs/plugin-react` | 6.1.1 | React JSX support for Vite and Vitest | MIT | Direct development |
@@ -33,14 +37,20 @@ Direct application dependencies and development/test dependencies are listed bel
 
 Transitive packages are resolved and pinned by the committed npm and Cargo lockfiles. Their licence metadata must be reviewed before a release distribution.
 
+## Transitive security update
+
+| Dependency | Locked version | Dependency path | Licence | Security status |
+| --- | --- | --- | --- | --- |
+| `source-map-js` | 1.2.2 | `jsdom → css-tree` and `vite → postcss` | BSD-3-Clause | Updated from vulnerable 1.2.1 to address GHSA-68fv-2mgg-jv7q; `npm audit` reports no known vulnerabilities. |
+
 ## Toolchain-provided dependencies
 
 | Tool | Verified version | Purpose | Licence | Classification |
 | --- | --- | --- | --- | --- |
 | Node.js | 22.22.2 | Execute frontend tooling | MIT | Toolchain-provided |
 | npm | 11.4.2 | Resolve packages and run scripts | Artistic-2.0 | Toolchain-provided |
-| Rust compiler | 1.98.1 | Compile and test the desktop host | Apache-2.0 OR MIT | Toolchain-provided |
-| Cargo | 1.98.1 | Resolve Rust crates and run Rust gates | Apache-2.0 OR MIT | Toolchain-provided |
+| Rust compiler | 1.99.0 | Compile and test the desktop host | Apache-2.0 OR MIT | Toolchain-provided |
+| Cargo | 1.99.0 | Resolve Rust crates and run Rust gates | Apache-2.0 OR MIT | Toolchain-provided |
 
 ## Scope boundary
 

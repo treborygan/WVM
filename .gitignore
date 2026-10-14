@@ -28,10 +28,13 @@ extracted-assets/
 node_modules/
 dist/
 target/
+target-*/
 src-tauri/target/
 src-tauri/gen/
 src-tauri/icons/icon.png
 src-tauri/icons/icon.ico
+public/brand-assets/
+/work/
 coverage/
 playwright-report/
 test-results/
