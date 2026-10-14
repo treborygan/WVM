@@ -17,10 +17,11 @@ if (Test-Path -LiteralPath $stageRoot) {
 $selected = @(
     $manifest.assets | Where-Object id -eq 'asset-dhl-logo-bf-rgb'
     $manifest.assets | Where-Object id -eq 'asset-dhl-illustration-warehouse-delivery'
+    $manifest.assets | Where-Object { $_.id -match '^asset-dhl-dynamic-elements-freeform-(?:0[1-9]|1[0-9]|2[0-2])-(?:rgb|white-rgb)$' }
     $manifest.fonts | Where-Object { $_.family -eq 'Delivery' -and $_.style -eq 'normal' -and $_.weight -in @(400, 700) }
 )
-if ($selected.Count -ne 4) {
-    throw "Expected the DHL logo, warehouse illustration, and two Delivery font styles; found $($selected.Count) manifest entries."
+if ($selected.Count -ne 48) {
+    throw "Expected the DHL logo, warehouse illustration, 44 Dynamic Element variants, and two Delivery font styles; found $($selected.Count) manifest entries."
 }
 
 New-Item -ItemType Directory -Path $stageRoot | Out-Null
@@ -40,13 +41,16 @@ try {
         if ($actualHash -ne ([string]$asset.sha256).ToLowerInvariant()) {
             throw "Brand asset hash mismatch for '$relative'."
         }
-        $destinationName = switch -Exact ([IO.Path]::GetFileName($relative)) {
+        if ($relative -match '^assets/dhl_dynamic-elements_freeform_(?:0[1-9]|1[0-9]|2[0-2])_(?:rgb|white_rgb)\.svg$') {
+            $destinationName = [IO.Path]::GetFileName($relative)
+        }
+        else { $destinationName = switch -Exact ([IO.Path]::GetFileName($relative)) {
             'DHL_Logo_BF_rgb.svg' { 'DHL_Logo_BF_rgb.svg' }
             'DHL_Illustration_Warehouse_Delivery.svg' { 'DHL_Illustration_Warehouse_Delivery.svg' }
             'Delivery_Rg.ttf' { 'Delivery_Rg.ttf' }
             'Delivery_Bd.ttf' { 'Delivery_Bd.ttf' }
             default { throw "Unapproved asset selected: '$relative'" }
-        }
+        } }
         Copy-Item -LiteralPath $resolvedSource -Destination (Join-Path $stageRoot $destinationName)
         $staged += [pscustomobject]@{ path = $destinationName; sha256 = $actualHash; source = $relative }
     }

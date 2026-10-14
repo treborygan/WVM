@@ -20,8 +20,35 @@ const familyLabels: Record<TemplateFamily, string> = {
 };
 
 type DialogMode = "create" | "edit" | null;
+type WorkspaceSection = "catalog" | "templates" | "assets" | "settings";
+
+const sectionLabels: Record<WorkspaceSection, string> = {
+  catalog: "Visual catalog",
+  templates: "Templates",
+  assets: "Brand assets",
+  settings: "Workspace settings",
+};
+
+const bundledBrandAssets = [
+  { name: "DHL logo", type: "SVG logo", src: "/brand-assets/DHL_Logo_BF_rgb.svg", alt: "DHL brand field logo" },
+  { name: "Warehouse delivery illustration", type: "SVG illustration", src: "/brand-assets/DHL_Illustration_Warehouse_Delivery.svg", alt: "DHL warehouse delivery illustration" },
+];
+const dynamicElements = Array.from({ length: 22 }, (_, index) => {
+  const number = String(index + 1).padStart(2, "0");
+  return {
+    name: `Dynamic Element ${number}`,
+    rgb: `/brand-assets/dhl_dynamic-elements_freeform_${number}_rgb.svg`,
+    white: `/brand-assets/dhl_dynamic-elements_freeform_${number}_white_rgb.svg`,
+  };
+});
+
+function readWorkspaceSection(hash: string): WorkspaceSection {
+  const section = hash.replace(/^#/, "");
+  return section === "templates" || section === "assets" || section === "settings" ? section : "catalog";
+}
 
 export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gateway?: CatalogGateway }) {
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>(() => readWorkspaceSection(window.location.hash));
   const [query, setQuery] = useState<CatalogListQuery>({ page: 1, page_size: 50, sort_by: "name", sort_order: "asc" });
   const [searchInput, setSearchInput] = useState("");
   const [rows, setRows] = useState<readonly VisualRow[]>([]);
@@ -41,6 +68,16 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
   const dialogRef = useRef<HTMLDialogElement>(null);
   const loadGeneration = useRef(0);
   const detailGeneration = useRef(0);
+
+  useEffect(() => {
+    const syncSection = () => setActiveSection(readWorkspaceSection(window.location.hash));
+    window.addEventListener("hashchange", syncSection);
+    window.addEventListener("popstate", syncSection);
+    return () => {
+      window.removeEventListener("hashchange", syncSection);
+      window.removeEventListener("popstate", syncSection);
+    };
+  }, []);
 
   const load = useCallback(async (nextQuery: CatalogListQuery, nextSelected?: VisualDetail | null) => {
     const generation = ++loadGeneration.current;
@@ -271,17 +308,51 @@ export function CatalogApp({ gateway = desktopCatalogGateway }: { readonly gatew
       <aside className="side-rail" aria-label="Main navigation">
         <div className="product-name"><span className="product-mark" aria-hidden="true"><img src="/brand-assets/DHL_Logo_BF_rgb.svg" alt="" onError={(event) => { event.currentTarget.hidden = true; const fallback = event.currentTarget.parentElement?.querySelector(".product-mark-fallback"); if (fallback instanceof HTMLElement) fallback.hidden = false; }} /><span className="product-mark-fallback" hidden>W</span></span><strong>Warehouse<br />Visual Manager</strong></div>
         <nav aria-label="Workspace">
-          <a className="nav-item is-current" href="#catalog" aria-current="page"><span aria-hidden="true">▦</span>Catalog</a>
-          <a className="nav-item" href="#templates"><span aria-hidden="true">▤</span>Templates</a>
-          <a className="nav-item" href="#assets"><span aria-hidden="true">▧</span>Assets</a>
-          <a className="nav-item" href="#settings"><span aria-hidden="true">⚙</span>Settings</a>
+          {(["catalog", "templates", "assets", "settings"] as const).map((section) => (
+            <a key={section} className={`nav-item${activeSection === section ? " is-current" : ""}`} href={`#${section}`} aria-current={activeSection === section ? "page" : undefined} onClick={(event) => {
+              if (editorOpen && section !== "catalog" && !window.confirm("Leave the artboard? Unsaved edits will be discarded.")) { event.preventDefault(); return; }
+              event.preventDefault();
+              if (section !== "catalog") setEditorOpen(false);
+              if (window.location.hash !== `#${section}`) window.history.pushState(null, "", `#${section}`);
+              setActiveSection(section);
+            }}>
+              <span aria-hidden="true">{{ catalog: "▦", templates: "▤", assets: "▧", settings: "⚙" }[section]}</span><span className="nav-label">{section[0].toUpperCase() + section.slice(1)}</span>
+            </a>
+          ))}
         </nav>
         <p className="local-state">Local catalog</p>
       </aside>
 
       <main className="catalog-main" id="catalog">
-        <header className="page-header"><h1>{editorOpen ? "Artboard preview" : "Visual catalog"}</h1><button className="button button-primary" onClick={() => { setActionError(null); setDialogMode("create"); }} disabled={!templates.length || busy || editorOpen}>New visual</button></header>
-        {editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} assets={assetDataUrls} onImportImage={importEditorImage} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onExportSvg={exportEditorSvg} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
+        <header className="page-header"><h1>{activeSection === "catalog" && editorOpen ? "Artboard preview" : sectionLabels[activeSection]}</h1>{activeSection === "catalog" ? <button className="button button-primary" onClick={() => { setActionError(null); setDialogMode("create"); }} disabled={!templates.length || busy || editorOpen}>New visual</button> : null}</header>
+        {activeSection === "templates" ? <section className="workspace-page" aria-labelledby="templates-heading">
+          <div className="workspace-page-intro"><h2 id="templates-heading">Available templates</h2><p>Choose a catalog template family to start a new visual. Drafts created here remain in the local catalog.</p></div>
+          {templates.length ? <div className="workspace-card-grid">{templates.map((choice) => <article className="workspace-card" key={choice.template.id}>
+            <div><span className="workspace-card-kicker">{familyLabels[choice.template.family]}</span><h3>{choice.template.name}</h3></div>
+            <dl><Field label="Version" value={String(choice.selected_version_number)} /><Field label="Status" value={choice.template.lifecycle_state} /><Field label="Visual type" value={choice.template.visual_type} /></dl>
+            <button className="button button-primary" type="button" onClick={() => { setActiveSection("catalog"); window.location.hash = "#catalog"; setActionError(null); setDialogMode("create"); }} disabled={busy}>Create visual</button>
+          </article>)}</div> : <div className="workspace-empty"><h3>No templates available</h3><p>Create or import a template before creating visuals.</p></div>}
+        </section> : activeSection === "assets" ? <section className="workspace-page" aria-labelledby="assets-heading">
+          <div className="workspace-page-intro"><h2 id="assets-heading">Bundled DHL artwork</h2><p>The local branded WVM build includes the DHL logo, Warehouse Delivery illustration, and all 22 supplied Dynamic Elements in both RGB and white variants. Preview or download artwork below; these bundled resources are not yet registered in the managed editor asset store.</p></div>
+          <div className="workspace-card-grid">{bundledBrandAssets.map((asset) => <article className="workspace-card asset-card" key={asset.src}>
+            <div className="asset-preview"><img src={asset.src} alt={asset.alt} loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /></div>
+            <div><h3>{asset.name}</h3><p>{asset.type} · packaged with the local DHL build</p></div>
+            <a className="button button-secondary" href={asset.src} download>Download asset</a>
+          </article>)}</div>
+          <section className="dynamic-elements-section" aria-labelledby="dynamic-elements-heading">
+            <div className="workspace-page-intro"><h2 id="dynamic-elements-heading">DHL Dynamic Elements</h2><p>22 source designs, each supplied in RGB and white. The dark preview makes the white artwork visible.</p></div>
+            <div className="dynamic-element-grid">{dynamicElements.map((element) => <article className="dynamic-element-card" key={element.name}>
+              <h3>{element.name}</h3>
+              <div className="dynamic-variant-grid">
+                <div className="dynamic-variant"><div className="dynamic-preview"><img src={element.rgb} alt={`${element.name} RGB artwork`} loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /></div><span>RGB</span><a href={element.rgb} download>Download RGB</a></div>
+                <div className="dynamic-variant"><div className="dynamic-preview dynamic-preview-dark"><img src={element.white} alt={`${element.name} white artwork`} loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /></div><span>White</span><a href={element.white} download>Download white</a></div>
+              </div>
+            </article>)}</div>
+          </section>
+        </section> : activeSection === "settings" ? <section className="workspace-page" aria-labelledby="settings-heading">
+          <div className="workspace-page-intro"><h2 id="settings-heading">Workspace information</h2><p>WVM keeps the catalog in local application storage on this device. The current build does not synchronize records to a shared service.</p></div>
+          <div className="workspace-card settings-card"><h3>Active brand styling</h3><p>The bundled local DHL build uses these supplied brand colors.</p><div className="brand-swatches"><div><span aria-hidden="true" className="brand-swatch brand-swatch-yellow" /><span>Postyellow · #FFCC00</span></div><div><span aria-hidden="true" className="brand-swatch brand-swatch-red" /><span>DHL red · #D40511</span></div></div><p className="settings-note">Brand profiles and persistent user preferences are not configurable in this preview release.</p></div>
+        </section> : editorOpen && selected?.current_template_version ? <ArtboardWorkspace document={selected.current_template_version.document} versionNumber={selected.current_template_version.version_number} values={editorValues} assets={assetDataUrls} onImportImage={importEditorImage} saving={busy} onSaveDraft={(document) => void saveTemplateDraft(document)} onExportSvg={exportEditorSvg} onClose={() => setEditorOpen(false)} /> : <div className="catalog-content">
           <section className="catalog-list" aria-label="Visual catalog results">
             <form className="search-form" onSubmit={submitSearch}>
               <label className="search-field"><span className="visually-hidden">Search visuals</span><span aria-hidden="true">⌕</span>

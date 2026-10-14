@@ -20,12 +20,14 @@ The manual distinguishes mobile App fonts from Desktop fonts intended for print/
 ## Implemented in the usable catalog build
 
 - The local MSI displays the supplied DHL brand-field SVG logo in its desktop rail, the warehouse-delivery illustration in the empty-catalog state, and the supplied Desktop Delivery regular/bold fonts. At narrow window widths, the logo falls back to a compact W mark to retain the 84 px minimum digital logo width.
-- `scripts/build-local-dhl-release.ps1` selects only those four manifest entries, verifies each SHA-256 before staging, builds the MSI, and leaves the staged company files in an ignored `public/brand-assets/` folder. The staging is excluded from Git and follows the existing DHL master palette `#FFCC00` / `#D40511`.
+- The workspace `Assets` destination previews and offers direct downloads for the packaged logo, Warehouse Delivery illustration, and all 22 RGB/white Dynamic Element pairs. The `Templates` destination lists the template choices returned by the local catalog and can launch visual creation; the `Settings` destination explains local-only storage and displays the supplied DHL palette. The assets are bundled previews/downloads, not records in the editor's managed asset store.
+- `scripts/build-local-dhl-release.ps1` selects 48 manifest entries: the logo, warehouse illustration, 44 Dynamic Element SVG variants, and two Delivery font styles. It verifies each SHA-256 before staging, builds the MSI, and leaves the staged company files in an ignored `public/brand-assets/` folder. The staging is excluded from Git and follows the existing DHL master palette `#FFCC00` / `#D40511`.
 - The actual vector logo is retained as SVG. The two Desktop TTFs are packaged only in this local user-requested MSI build; no font binaries or graphics were added to Git.
 
 ## Remaining implementation and verification
 
 - Support an operator-selected local brand pack containing images/logos, exact font bytes, approved colors, relative filenames and expected hashes. Validate every asset and reject unsafe paths/content before activation.
+- Register the packaged DHL artwork in WVM's managed asset store so users can place the selected graphics directly in a template without manually downloading and re-importing them.
 - Copy accepted resources into WVM's managed local asset/font store. Do not open a live SQLite database or retain an execution dependency on the Google Drive source folder.
 - Use the actual supplied SVG logo in preview and vector PDF; use explicit font bytes for text layout and export. A family-name-only CSS declaration must not substitute a host font silently.
 - Brand changes affect drafts/current previews; immutable historical published output pins its brand/font/asset snapshot.
