@@ -11,6 +11,53 @@ describe("CatalogApp", () => {
 
   beforeEach(() => {
     gateway = syntheticCatalog();
+    window.history.replaceState(null, "", "#catalog");
+  });
+
+  it("opens the Templates, Assets, and Settings destinations from the workspace navigation", async () => {
+    render(<CatalogApp gateway={gateway} />);
+    await screen.findByRole("row", { name: /Aisle marker A-01/ });
+
+    fireEvent.click(screen.getByRole("link", { name: "Templates" }));
+    expect(await screen.findByRole("heading", { name: "Templates" })).toBeVisible();
+    expect(screen.getByText("Gang standard 2-up · sample")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute("aria-current", "page");
+    expect(window.location.hash).toBe("#templates");
+
+    fireEvent.click(screen.getByRole("link", { name: "Assets" }));
+    expect(await screen.findByRole("heading", { name: "Brand assets" })).toBeVisible();
+    expect(screen.getByText("DHL logo")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Dynamic Element 22" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Assets" })).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Workspace settings" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(screen.getByRole("link", { name: "Catalog" }));
+    expect(await screen.findByRole("heading", { name: "Visual catalog" })).toBeVisible();
+
+    window.history.replaceState(null, "", "#assets");
+    fireEvent.popState(window);
+    expect(await screen.findByRole("heading", { name: "Brand assets" })).toBeVisible();
+  });
+
+  it("confirms before leaving an edited artboard through the sidebar", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<CatalogApp gateway={gateway} />);
+    fireEvent.click(await screen.findByRole("row", { name: /Aisle marker A-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open artboard" }));
+    fireEvent.keyDown(await screen.findByRole("button", { name: "Select text: A-01" }), { key: "ArrowRight" });
+
+    fireEvent.click(screen.getByRole("link", { name: "Templates" }));
+    expect(confirm).toHaveBeenCalledWith("Leave the artboard? Unsaved edits will be discarded.");
+    expect(screen.getByRole("heading", { name: "Template artboard" })).toBeVisible();
+    expect(window.location.hash).toBe("#catalog");
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("link", { name: "Templates" }));
+    expect(await screen.findByRole("heading", { name: "Templates" })).toBeVisible();
+    confirm.mockRestore();
   });
 
   it("loads a searchable catalog and opens the selected visual history", async () => {
