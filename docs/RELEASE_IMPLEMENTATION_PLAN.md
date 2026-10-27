@@ -1,6 +1,6 @@
 # WVM V1 Release Implementation Plan
 
-> Execution update (2026-10-14): the user directed that implementation proceed solo without agents. Do not use SOFA. The packaged catalog now includes a non-print-ready preview bound to each record's exact immutable template version; the full editor, rendering, PDF/print, import, and backup stages remain.
+> Execution update (2026-10-14): the user directed that implementation proceed solo without agents. The packaged catalog now includes a non-print-ready preview bound to each record's exact immutable template version; the full editor, rendering, PDF/print, import, and backup stages remain.
 
 **Goal:** Complete the Windows-first Warehouse Visual Manager specified in `docs/V1_SPEC.md`, retaining local SQLite, versioned records, a millimetre editor, deterministic vector export, controlled printing, and safe backup/restore.
 
@@ -35,7 +35,7 @@ flowchart LR
 
 ## Global constraints
 
-- No SOFA. No operational records, private source paths, production databases, secrets, or private reports in Git or release samples. Keep DHL binaries out of Git; the user-requested branded MSI is a local private build whose source assets are hash-verified and staged in an ignored directory.
+- No operational records, private source paths, production databases, secrets, or private reports in Git or release samples. Keep DHL binaries out of Git; the user-requested branded MSI is a local private build whose source assets are hash-verified and staged in an ignored directory.
 - Preserve ADR-001 local SQLite, ADR-002 shared SVG scene, ADR-003 immutable documents, and deferred SharePoint/MCP/AI scope.
 - Store the active database under the platform-local application-data directory, never this checkout or a synced/shared folder.
 - Do not add automatic GitHub Actions. Do not merge main or publish a GitHub release without explicit user approval.
